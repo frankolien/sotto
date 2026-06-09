@@ -1,0 +1,148 @@
+-- Sotto.daml -- Confidential payout core for the Canton MVP.
+--
+-- THE PRIVACY MODEL (this is the whole point):
+--   * A Holding (the settlement token) is visible ONLY to its issuer and its owner.
+--     Recipients therefore never see one another's balances.
+--   * A DisbursementReceipt is visible to the payer, the issuer, the ONE recipient
+--     it concerns, AND the auditor. So each recipient sees only their own payment,
+--     while the auditor sees the entire batch. That asymmetry is the demo.
+--   * The PayoutMandate is visible to the payer, the issuer, and the auditor only.
+--
+-- The three demo beats fall straight out of the templates below:
+--   1. Atomic batch  -> PayoutMandate.Disburse moves every payment in ONE
+--                       transaction. If any line fails a check, the whole batch
+--                       rolls back. There is no half-paid state.
+--   2. Per-recipient privacy + auditor view -> see the observer lists.
+--   3. Maker-checker -> a payment over the mandate threshold cannot pass through
+--                       Disburse; it is raised as a LargePaymentProposal and signed
+--                       off by a second party (the approver), on-ledger.
+--
+-- Privacy is never enforced in application code: it is a consequence of the
+-- signatory/observer lists below. The runnable proof lives in the `sotto-tests`
+-- package (module Sotto.Scripts.Demo), which asserts the visibility asymmetry
+-- per party against the ledger.
+
+module Sotto where
+
+import DA.Foldable (forA_)
+
+-- The settlement token. The issuer is the sole signatory (realistic for a regulated
+-- stablecoin like USDCx); the owner is an observer. So only those two parties can
+-- see a given holding -- and the issuer/payer can pay a recipient without that
+-- recipient having to interactively accept, which is what lets a batch settle in
+-- one click.
+template Holding
+  with
+    issuer : Party
+    owner : Party
+    amount : Decimal
+  where
+    signatory issuer
+    observer owner
+    ensure amount > 0.0
+
+-- A permanent, auditable record of one payment in a batch. The recipient sees only
+-- their own; the auditor sees every receipt in the batch.
+template DisbursementReceipt
+  with
+    payer : Party
+    issuer : Party
+    auditor : Party
+    recipient : Party
+    amount : Decimal
+    batchRef : Text
+  where
+    signatory payer, issuer
+    observer recipient, auditor
+
+-- The payer's on-ledger spending authority. Co-signed by the issuer (authorising
+-- disbursement of its token under agreed limits) and observed by the auditor.
+-- Nonconsuming, so a single mandate governs many payout runs.
+template PayoutMandate
+  with
+    payer : Party
+    issuer : Party
+    auditor : Party
+    approver : Party
+    cap : Decimal           -- max total a single batch may disburse
+    threshold : Decimal     -- any single payment above this needs the approver
+    approved : [Party]      -- allow-list of recipients
+  where
+    signatory payer, issuer
+    observer auditor
+
+    nonconsuming choice Disburse : [ContractId DisbursementReceipt]
+      with
+        treasury : ContractId Holding    -- the payer's funding holding
+        batchRef : Text
+        payments : [(Party, Decimal)]    -- (recipient, amount) per line
+      controller payer
+      do
+        let total = foldl (\acc (_, a) -> acc + a) 0.0 payments
+        assertMsg "batch exceeds mandate cap" (total <= cap)
+        forA_ payments $ \(r, amt) -> do
+          assertMsg "recipient is not on the mandate allow-list" (r `elem` approved)
+          assertMsg "payment is over threshold and needs approval" (amt <= threshold)
+        t <- fetch treasury
+        assertMsg "treasury must belong to the payer" (t.owner == payer)
+        assertMsg "treasury issuer mismatch" (t.issuer == issuer)
+        assertMsg "insufficient treasury balance" (t.amount >= total)
+        -- Settle: burn the treasury, pay each recipient, return change -- all inside
+        -- this one transaction, so the batch is atomic.
+        archive treasury
+        if t.amount > total
+          then do
+            _ <- create Holding with issuer = issuer, owner = payer, amount = t.amount - total
+            pure ()
+          else pure ()
+        forA payments $ \(r, amt) -> do
+          _ <- create Holding with issuer = issuer, owner = r, amount = amt
+          create DisbursementReceipt with
+            payer
+            issuer
+            auditor
+            recipient = r
+            amount = amt
+            batchRef
+
+-- A single payment above the mandate threshold. Raised by the payer (with the issuer
+-- co-signing that settlement is permissible) and held until a SECOND party -- the
+-- approver -- signs off. Maker-checker, enforced by the ledger rather than the app.
+template LargePaymentProposal
+  with
+    payer : Party
+    issuer : Party
+    approver : Party
+    auditor : Party
+    recipient : Party
+    amount : Decimal
+    treasury : ContractId Holding
+    batchRef : Text
+  where
+    signatory payer, issuer
+    observer approver, auditor
+
+    choice Approve : ContractId DisbursementReceipt
+      controller approver
+      do
+        t <- fetch treasury
+        assertMsg "treasury must belong to the payer" (t.owner == payer)
+        assertMsg "insufficient treasury balance" (t.amount >= amount)
+        archive treasury
+        if t.amount > amount
+          then do
+            _ <- create Holding with issuer = issuer, owner = payer, amount = t.amount - amount
+            pure ()
+          else pure ()
+        _ <- create Holding with issuer = issuer, owner = recipient, amount = amount
+        create DisbursementReceipt with
+          payer
+          issuer
+          auditor
+          recipient
+          amount
+          batchRef
+
+    choice Reject : ()
+      controller approver
+      do pure ()

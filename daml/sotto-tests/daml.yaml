@@ -1,0 +1,13 @@
+# Sotto scripts + privacy proofs. Depends on daml-script and, as a data-dependency,
+# on the compiled `sotto` templates DAR. This package is never uploaded to a ledger;
+# it is the runnable proof of the privacy model.
+sdk-version: 3.4.11
+name: sotto-tests
+source: daml
+version: 0.1.0
+dependencies:
+  - daml-prim
+  - daml-stdlib
+  - daml-script
+data-dependencies:
+  - ../sotto/.daml/dist/sotto-0.1.0.dar

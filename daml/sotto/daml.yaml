@@ -1,0 +1,9 @@
+# Sotto confidential-payout templates. Templates ONLY -- no daml-script -- so the
+# DAR uploaded to a participant stays lean (scripts live in ../sotto-tests).
+sdk-version: 3.4.11
+name: sotto
+source: daml
+version: 0.1.0
+dependencies:
+  - daml-prim
+  - daml-stdlib

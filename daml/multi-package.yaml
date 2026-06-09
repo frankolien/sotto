@@ -1,0 +1,5 @@
+# Sotto Daml workspace. `sotto` holds the templates (uploaded to participants);
+# `sotto-tests` holds the runnable demo + privacy assertions (data-depends on sotto).
+packages:
+  - ./sotto
+  - ./sotto-tests

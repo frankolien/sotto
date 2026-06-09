@@ -1,0 +1,111 @@
+-- Sotto.Scripts.Demo -- the runnable proof of the confidential-payout model.
+--
+-- Run it from Daml Studio's "Script results" pane (or `dpm test`), then open each
+-- party's view: confirm Ada cannot see Kola's payment, while the Auditor sees both.
+-- The privacy story is not narrated here -- it is ASSERTED against the ledger at the
+-- bottom of this script, so a regression in an observer list breaks the build.
+
+module Sotto.Scripts.Demo where
+
+import Sotto
+import Daml.Script
+
+demo : Script ()
+demo = script do
+  issuer   <- allocateParty "USDCx-Issuer"
+  payer    <- allocateParty "AcmeCorp"
+  auditor  <- allocateParty "Auditor"
+  approver <- allocateParty "CFO"
+  ada      <- allocateParty "Ada"
+  kola     <- allocateParty "Kola"
+
+  -- Issuer funds the payer's treasury.
+  treasury <- submit issuer do
+    createCmd Holding with issuer = issuer, owner = payer, amount = 100000.0
+
+  -- Payer and issuer establish the mandate.
+  mandate <- submitMulti [payer, issuer] [] do
+    createCmd PayoutMandate with
+      payer
+      issuer
+      auditor
+      approver
+      cap = 50000.0
+      threshold = 10000.0
+      approved = [ada, kola]
+
+  -- BEATS 1 + 2: one atomic batch; each recipient private, auditor sees all.
+  _ <- submit payer do
+    exerciseCmd mandate Disburse with
+      treasury
+      batchRef = "2026-Q3-payroll"
+      payments = [(ada, 2500.0), (kola, 1800.0)]
+
+  -- An over-threshold payment through Disburse is rejected (12000 > 10000).
+  bigTreasury <- submit issuer do
+    createCmd Holding with issuer = issuer, owner = payer, amount = 20000.0
+  submitMustFail payer do
+    exerciseCmd mandate Disburse with
+      treasury = bigTreasury
+      batchRef = "should-fail"
+      payments = [(ada, 12000.0)]
+
+  -- BEAT 3: maker-checker. The same large payment clears only after the approver signs.
+  proposal <- submitMulti [payer, issuer] [] do
+    createCmd LargePaymentProposal with
+      payer
+      issuer
+      approver
+      auditor
+      recipient = ada
+      amount = 12000.0
+      treasury = bigTreasury
+      batchRef = "bonus"
+
+  -- The approver acts; the payer grants read visibility of the treasury for this one
+  -- approval (modelled here with readAs -- in production this is explicit disclosure of
+  -- that single contract). The approver authorises settlement -- it cannot pass without
+  -- the second signature -- but is never made an observer of the token itself.
+  _ <- submitMulti [approver] [payer] do exerciseCmd proposal Approve
+
+  -- ------------------------------------------------------------------
+  -- PROVE THE PRIVACY. The guarantee below is not narrated, it is tested:
+  -- it falls straight out of the signatory/observer lists, and the ledger
+  -- enforces it. Each `query` returns only what that party is a stakeholder
+  -- of. If a future edit weakens an observer list, one of these assertions
+  -- breaks -- which is exactly what you want.
+  -- ------------------------------------------------------------------
+
+  -- Each recipient sees only the receipts they are a party to.
+  adaReceipts     <- query @DisbursementReceipt ada
+  kolaReceipts    <- query @DisbursementReceipt kola
+  auditorReceipts <- query @DisbursementReceipt auditor
+
+  -- Ada was paid twice (the batch + the approved bonus); Kola once.
+  assertMsg "Ada must see exactly her own 2 receipts"
+    (length adaReceipts == 2 && all (\(_, r) -> r.recipient == ada) adaReceipts)
+  assertMsg "Kola must see exactly his own 1 receipt"
+    (length kolaReceipts == 1 && all (\(_, r) -> r.recipient == kola) kolaReceipts)
+
+  -- The auditor sees the WHOLE batch: every receipt, both recipients.
+  assertMsg "Auditor must see all 3 receipts in the batch"
+    (length auditorReceipts == 3)
+  assertMsg "Auditor must see both recipients"
+    (  any (\(_, r) -> r.recipient == ada)  auditorReceipts
+    && any (\(_, r) -> r.recipient == kola) auditorReceipts )
+
+  -- Balance privacy: a recipient sees only Holdings they own -- never another
+  -- recipient's, and never the payer's treasury or change.
+  adaHoldings  <- query @Holding ada
+  kolaHoldings <- query @Holding kola
+  assertMsg "Ada must see only holdings she owns"
+    (all (\(_, h) -> h.owner == ada) adaHoldings)
+  assertMsg "Kola must see only holdings he owns"
+    (all (\(_, h) -> h.owner == kola) kolaHoldings)
+
+  -- The mandate is private to payer + issuer + auditor; a recipient never sees it.
+  adaMandates <- query @PayoutMandate ada
+  assertMsg "A recipient must never see the payout mandate" (null adaMandates)
+
+  debug "PRIVACY PROVEN: each recipient sees only their own; the auditor sees the whole batch."
+  pure ()

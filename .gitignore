@@ -1,0 +1,34 @@
+# Daml / dpm
+.daml/
+*.dar
+.dpm/
+
+# Java / Gradle / Maven (backend)
+backend/.gradle/
+backend/build/
+backend/target/
+backend/.idea/
+*.class
+
+# Node (if Node backend chosen)
+node_modules/
+dist/
+*.log
+
+# Flutter / Dart (frontend)
+frontend/.dart_tool/
+frontend/build/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/ios/Pods/
+frontend/android/.gradle/
+frontend/**/*.iml
+
+# Env / secrets
+.env
+.env.local
+*.local
+
+# OS / editor
+.DS_Store
+*.swp
