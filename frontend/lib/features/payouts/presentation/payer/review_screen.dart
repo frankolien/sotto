@@ -23,10 +23,17 @@ class ReviewScreen extends ConsumerWidget {
     final bigLine = b.lines.where(s.isOver).firstOrNull;
 
     void settle() {
+      // Capture the notifiers before navigating: shell.go disposes this screen,
+      // so the captured `ref` can't be used once the delay elapses. The notifiers
+      // live in the provider container and outlive the widget.
+      final ledger = ref.read(ledgerControllerProvider.notifier);
       shell.go(AppScreen.settling);
-      Future.delayed(const Duration(seconds: 2), () {
-        ref.read(ledgerControllerProvider.notifier).settle();
-        ref.read(shellControllerProvider.notifier).completeSettle();
+      Future.delayed(const Duration(seconds: 2), () async {
+        try {
+          await ledger.settle();
+        } finally {
+          shell.completeSettle(); // always leave the settling screen
+        }
       });
     }
 

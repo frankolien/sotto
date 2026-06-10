@@ -15,22 +15,37 @@ class MockLedgerRepository implements LedgerRepository {
 
   @override
   Future<void> configure(RailConfig c) async {
+    final lines = [
+      for (var i = 0; i < c.recipients.length; i++)
+        PayoutLine(
+          id: 'r${i + 1}',
+          name: c.recipients[i].name,
+          role: c.recipients[i].role,
+          handle: '',
+          amount: c.recipients[i].amount,
+          you: i == 0, // the Recipient lens follows the first payee
+          big: c.recipients[i].amount > c.threshold,
+        ),
+    ];
     _state = LedgerState(
       treasury: c.treasury,
       org: c.org,
-      mandate: _state.mandate.copyWith(
+      recipientName: lines.isEmpty ? '' : lines.first.name,
+      mandate: Mandate(
+        name: _state.mandate.name,
         cap: c.cap,
         threshold: c.threshold,
         approver: c.approver,
         approverRole: c.approverRole,
         auditor: c.auditor,
         auditorRole: c.auditorRole,
+        recipients: lines.length,
       ),
       batch: Batch(
         id: _state.batch.id,
         label: _state.batch.label,
         status: BatchStatus.draft,
-        lines: _state.batch.lines.map((l) => l.copyWith(status: LineStatus.draft)).toList(),
+        lines: lines,
       ),
     );
     await _async(null);
@@ -92,6 +107,7 @@ class MockLedgerRepository implements LedgerRepository {
     return _async(LedgerState(
       treasury: role == Role.payer ? s.treasury : 0,
       org: s.org,
+      recipientName: s.recipientName,
       mandate: visible
           ? s.mandate
           : const Mandate(

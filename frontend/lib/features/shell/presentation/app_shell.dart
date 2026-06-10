@@ -35,7 +35,11 @@ class AppShell extends ConsumerWidget {
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: c.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
-      child: ColoredBox(
+      // Material (not a bare ColoredBox) is the surface for every screen: without
+      // a Material ancestor, MaterialApp's fallback text style paints debug yellow
+      // underlines under all text. One root Material covers onboarding, the wallet
+      // screens and the sheets — none of which use Scaffold.
+      child: Material(
         color: c.bg,
         child: Center(
           child: ConstrainedBox(

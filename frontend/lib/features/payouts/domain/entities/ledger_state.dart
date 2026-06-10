@@ -120,6 +120,7 @@ class Batch {
 class LedgerState {
   final double treasury;
   final String org;
+  final String recipientName; // identity the Recipient lens represents
   final Mandate mandate;
   final Batch batch;
 
@@ -128,6 +129,7 @@ class LedgerState {
     required this.org,
     required this.mandate,
     required this.batch,
+    this.recipientName = '',
   });
 
   /// A line needs a second signer when it exceeds the mandate threshold.
@@ -141,12 +143,14 @@ class LedgerState {
   LedgerState copyWith({
     double? treasury,
     String? org,
+    String? recipientName,
     Mandate? mandate,
     Batch? batch,
   }) =>
       LedgerState(
         treasury: treasury ?? this.treasury,
         org: org ?? this.org,
+        recipientName: recipientName ?? this.recipientName,
         mandate: mandate ?? this.mandate,
         batch: batch ?? this.batch,
       );
@@ -156,6 +160,7 @@ class LedgerState {
   static LedgerState seed() => const LedgerState(
         treasury: 312480,
         org: 'Lumen Studio',
+        recipientName: 'Amara Okafor',
         mandate: Mandate(
           name: 'Contributor roster',
           cap: 200000,

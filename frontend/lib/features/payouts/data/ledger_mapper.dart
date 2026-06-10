@@ -7,6 +7,7 @@ import '../domain/entities/rail_config.dart';
 LedgerState ledgerStateFromJson(Map<String, dynamic> j) => LedgerState(
       treasury: (j['treasury'] as num).toDouble(),
       org: j['org'] as String,
+      recipientName: j['recipientName'] as String? ?? '',
       mandate: _mandateFromJson(j['mandate'] as Map<String, dynamic>),
       batch: _batchFromJson(j['batch'] as Map<String, dynamic>),
     );
@@ -51,4 +52,7 @@ Map<String, dynamic> railConfigToJson(RailConfig c) => {
       'approverRole': c.approverRole,
       'auditor': c.auditor,
       'auditorRole': c.auditorRole,
+      'recipients': [
+        for (final r in c.recipients) {'name': r.name, 'role': r.role, 'amount': r.amount},
+      ],
     };

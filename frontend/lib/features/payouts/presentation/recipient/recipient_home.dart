@@ -14,13 +14,12 @@ import '../state/ledger_providers.dart';
 class RecipientHome extends ConsumerWidget {
   const RecipientHome({super.key});
 
-  static const _name = 'Amara Okafor';
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final c = context.sotto;
     final s = ref.watch(ledgerControllerProvider);
     final shell = ref.read(shellControllerProvider.notifier);
+    final name = s.recipientName.isNotEmpty ? s.recipientName : 'Recipient';
 
     // On real Canton this list holds only this recipient's own line — the rest
     // of the batch is not theirs to see, so it never reaches the client.
@@ -46,7 +45,7 @@ class RecipientHome extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AccountHeader(name: _name, sub: 'Recipient · tap to switch view', onOpen: shell.openRoles),
+          AccountHeader(name: name, sub: 'Recipient · tap to switch view', onOpen: shell.openRoles),
           HomeBody(children: [
             BigBalance(label: 'Total balance', value: balance),
             AppButton(

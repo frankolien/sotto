@@ -22,7 +22,7 @@ class AccountScreen extends ConsumerWidget {
       Role.payer => s.org,
       Role.auditor => s.mandate.auditor,
       Role.approver => s.mandate.approver,
-      Role.recipient => 'Amara Okafor',
+      Role.recipient => s.recipientName,
     };
 
     void reset() {

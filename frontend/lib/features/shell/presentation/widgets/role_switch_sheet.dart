@@ -25,7 +25,7 @@ class RoleSwitchSheet extends ConsumerWidget {
           Role.payer => s.org.isNotEmpty ? s.org : 'Lumen Studio',
           Role.auditor => s.mandate.auditor.isNotEmpty ? s.mandate.auditor : 'Hale & Co.',
           Role.approver => s.mandate.approver.isNotEmpty ? s.mandate.approver : 'Priya Raman',
-          Role.recipient => 'Amara Okafor',
+          Role.recipient => s.recipientName.isNotEmpty ? s.recipientName : 'Recipient',
         };
 
     return SottoSheet(

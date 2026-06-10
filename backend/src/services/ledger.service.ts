@@ -6,9 +6,9 @@ import {
   BATCH_ID,
   BATCH_LABEL,
   DEFAULT_CONFIG,
-  RECIPIENTS,
   RecipientMeta,
-  YOU,
+  partyHint,
+  rosterFor,
 } from '../models/roster.ts';
 import { LedgerStateDto, LineDto, LineStatus, RailConfig, Role } from '../models/types.ts';
 import { CantonService, CreatedEvent } from './canton.service.ts';
@@ -22,6 +22,8 @@ export class LedgerService {
   private auditorParty = '';
   private approverParty = '';
   private readonly recipientParty = new Map<string, string>(); // lineId → party
+  private roster: RecipientMeta[] = []; // the active roster (default or configured)
+  private youId = ''; // the recipient the Recipient lens represents (first payee)
   private cfg: RailConfig = DEFAULT_CONFIG;
   private mandateCid = '';
   private lineStatus = new Map<string, LineStatus>();
@@ -35,16 +37,13 @@ export class LedgerService {
     return `sotto-${Date.now()}-${this.seq++}`;
   }
 
-  /** One-time bootstrap: upload the DAR, allocate every party, seed the batch. */
+  /** One-time bootstrap: upload the DAR, allocate the fixed parties (issuer +
+   * payer), then apply the default config — which allocates the approver,
+   * auditor and recipient parties and seeds the batch. */
   async init(darPath: string): Promise<void> {
     await this.canton.uploadDar(darPath);
     this.issuer = await this.canton.ensureParty('Issuer');
     this.payer = await this.canton.ensureParty('LumenStudio');
-    this.auditorParty = await this.canton.ensureParty('Auditor');
-    this.approverParty = await this.canton.ensureParty('Approver');
-    for (const r of RECIPIENTS) {
-      this.recipientParty.set(r.id, await this.canton.ensureParty(r.hint));
-    }
     await this.applyConfig(DEFAULT_CONFIG);
   }
 
@@ -61,7 +60,7 @@ export class LedgerService {
       case 'payer': return this.payer;
       case 'auditor': return this.auditorParty;
       case 'approver': return this.approverParty;
-      case 'recipient': return this.recipientParty.get(YOU)!;
+      case 'recipient': return this.recipientParty.get(this.youId)!;
     }
   }
 
@@ -84,13 +83,28 @@ export class LedgerService {
     }
   }
 
-  /** Fund a fresh treasury and (re)establish the mandate from a config. */
+  /** Allocate the parties a config names, fund a fresh treasury, and (re)establish
+   * the mandate. The roster, approver and auditor are all driven by the config —
+   * picking a different approver allocates and signs with a different real party. */
   private async applyConfig(cfg: RailConfig): Promise<void> {
     await this.archiveAll();
     this.cfg = cfg;
     this.settled = false;
-    this.lineStatus = new Map(RECIPIENTS.map((r) => [r.id, 'draft' as LineStatus]));
     this.proposalCid.clear();
+
+    // The chosen approver / auditor become their own Canton parties — the name
+    // on the contract is the identity that was picked, not a fixed relabel.
+    this.approverParty = await this.canton.ensureParty(partyHint(cfg.approver, 'Approver'));
+    this.auditorParty = await this.canton.ensureParty(partyHint(cfg.auditor, 'Auditor'));
+
+    // The editable roster: one Canton party per payee.
+    this.roster = rosterFor(cfg);
+    this.youId = this.roster[0]?.id ?? '';
+    this.recipientParty.clear();
+    for (const r of this.roster) {
+      this.recipientParty.set(r.id, await this.canton.ensureParty(r.hint));
+    }
+    this.lineStatus = new Map(this.roster.map((r) => [r.id, 'draft' as LineStatus]));
 
     // Issuer mints settlement tokens into the payer's treasury.
     await this.canton.submit(
@@ -99,8 +113,8 @@ export class LedgerService {
       this.nextCommandId(),
     );
 
-    // Payer + issuer establish the mandate.
-    const approved = RECIPIENTS.map((r) => this.recipientParty.get(r.id)!);
+    // Payer + issuer establish the mandate over the roster's parties.
+    const approved = this.roster.map((r) => this.recipientParty.get(r.id)!);
     const created = await this.canton.submit(
       [this.payer, this.issuer],
       [this.canton.create('PayoutMandate', {
@@ -130,8 +144,8 @@ export class LedgerService {
 
   /** Run the batch: settle under-threshold lines atomically, hold the rest. */
   async settle(): Promise<void> {
-    const under = RECIPIENTS.filter((r) => r.amount <= this.cfg.threshold);
-    const over = RECIPIENTS.filter((r) => r.amount > this.cfg.threshold);
+    const under = this.roster.filter((r) => r.amount <= this.cfg.threshold);
+    const over = this.roster.filter((r) => r.amount > this.cfg.threshold);
 
     if (under.length) {
       const treasury = await this.currentTreasury();
@@ -204,7 +218,7 @@ export class LedgerService {
       handle: meta.handle,
       amount: meta.amount,
       status,
-      you: meta.id === YOU,
+      you: meta.id === this.youId,
       big: meta.amount > this.cfg.threshold,
     };
   }
@@ -229,15 +243,16 @@ export class LedgerService {
 
     let lines: LineDto[];
     if (role === 'payer' || role === 'auditor') {
-      lines = RECIPIENTS.map((m) => this.lineJson(m, ledgerStatus(m)));
+      lines = this.roster.map((m) => this.lineJson(m, ledgerStatus(m)));
     } else if (role === 'approver') {
-      lines = RECIPIENTS.filter((m) => m.amount > this.cfg.threshold).map((m) =>
+      lines = this.roster.filter((m) => m.amount > this.cfg.threshold).map((m) =>
         this.lineJson(m, ledgerStatus(m)),
       );
     } else {
       // recipient: only their own receipt is ever visible to them
-      const meta = RECIPIENTS.find((m) => m.id === YOU)!;
-      lines = paid.has(this.recipientParty.get(YOU)!) ? [this.lineJson(meta, 'settled')] : [];
+      const meta = this.roster.find((m) => m.id === this.youId);
+      const myParty = this.recipientParty.get(this.youId);
+      lines = meta && myParty && paid.has(myParty) ? [this.lineJson(meta, 'settled')] : [];
     }
 
     const treasury = holdings
@@ -248,6 +263,7 @@ export class LedgerService {
     return {
       treasury,
       org: this.cfg.org,
+      recipientName: this.roster.find((m) => m.id === this.youId)?.name ?? '',
       mandate: {
         name: 'Contributor roster',
         cap: visible ? this.cfg.cap : 0,
@@ -256,7 +272,7 @@ export class LedgerService {
         approverRole: visible ? this.cfg.approverRole : '',
         auditor: visible ? this.cfg.auditor : '',
         auditorRole: visible ? this.cfg.auditorRole : '',
-        recipients: RECIPIENTS.length,
+        recipients: this.roster.length,
       },
       batch: {
         id: BATCH_ID,

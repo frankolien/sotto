@@ -6,6 +6,7 @@ import '../../../core/icons/sotto_icon.dart';
 import '../../../core/theme/sotto_colors.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/widgets/primitives.dart';
+import '../../payouts/domain/entities/rail_config.dart';
 import '../../payouts/presentation/state/ledger_providers.dart';
 import '../../shell/presentation/state/shell_providers.dart';
 import '../domain/entities/concept.dart';
@@ -211,18 +212,25 @@ class _Setup extends StatefulWidget {
 }
 
 class _SetupState extends State<_Setup> {
-  static const _steps = 3;
+  static const _steps = 4;
   int _step = 0;
   late final TextEditingController _org = TextEditingController(text: widget.draft.org);
+  late final TextEditingController _treasury =
+      TextEditingController(text: widget.draft.treasury.toStringAsFixed(0));
 
   @override
   void dispose() {
     _org.dispose();
+    _treasury.dispose();
     super.dispose();
   }
 
   SetupDraft get d => widget.draft;
-  bool get _canNext => _step == 0 ? _org.text.trim().isNotEmpty : true;
+  bool get _canNext => switch (_step) {
+        0 => _org.text.trim().isNotEmpty && d.treasury > 0,
+        2 => d.recipients.any((r) => r.name.isNotEmpty && r.amount > 0),
+        _ => true,
+      };
 
   void _next() => _step < _steps ? setState(() => _step++) : widget.onFinish();
   void _back() => _step > 0 ? setState(() => _step--) : widget.onBack();
@@ -276,7 +284,8 @@ class _SetupState extends State<_Setup> {
             child: switch (_step) {
               0 => _step0(c),
               1 => _step1(c),
-              2 => _step2(c),
+              2 => _stepRoster(c),
+              3 => _step2(c),
               _ => _review(c),
             },
           ),
@@ -324,42 +333,42 @@ class _SetupState extends State<_Setup> {
           _field(
             c,
             'Organisation name',
-            TextField(
+            _WizField(
               controller: _org,
+              hint: 'e.g. Lumen Studio',
               onChanged: (v) {
                 widget.onChange(d.copyWith(org: v));
                 setState(() {});
               },
-              decoration: InputDecoration(
-                hintText: 'e.g. Lumen Studio',
-                filled: true,
-                fillColor: c.surface,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(13),
-                  borderSide: BorderSide(color: c.hair2, width: 0.5),
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(13),
-                  borderSide: BorderSide(color: c.hair2, width: 0.5),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(13),
-                  borderSide: BorderSide(color: c.text, width: 1),
-                ),
-              ),
-              style: TextStyle(color: c.text, fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.3),
             ),
           ),
           const SizedBox(height: 24),
           _field(
             c,
             'Fund the treasury · USDCx',
-            _ChipRow(
-              value: d.treasury,
-              options: const [('250,000', 250000.0), ('500,000', 500000.0), ('1,000,000', 1000000.0)],
-              onChange: (v) => widget.onChange(d.copyWith(treasury: v)),
+            _WizField(
+              controller: _treasury,
+              hint: 'e.g. 312480',
+              number: true,
+              onChanged: (v) {
+                widget.onChange(d.copyWith(treasury: _parseAmount(v)));
+                setState(() {});
+              },
             ),
+          ),
+        ],
+      );
+
+  Widget _stepRoster(SottoColors c) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _heading(c, 'Who gets paid',
+              'Your contributor roster. Each payee becomes their own party on the ledger and sees only their own payment.'),
+          const SizedBox(height: 20),
+          _RosterEditor(
+            value: d.recipients,
+            threshold: d.threshold,
+            onChange: (rs) => widget.onChange(d.copyWith(recipients: rs)),
           ),
         ],
       );
@@ -454,9 +463,11 @@ class _SetupState extends State<_Setup> {
       );
 
   Widget _review(SottoColors c) {
+    final payees = d.recipients.where((r) => r.name.isNotEmpty).length;
     final rows = [
       ('Organisation', d.org),
       ('Treasury', '${fmt0(d.treasury)} USDCx'),
+      ('Recipients', '$payees payee${payees == 1 ? '' : 's'}'),
       ('Per-cycle cap', '${fmt0(d.cap)} USDCx'),
       ('Approval threshold', '${fmt0(d.threshold)} USDCx'),
       ('Approver', d.approver),
@@ -501,6 +512,233 @@ class _SetupState extends State<_Setup> {
           ),
         ),
       ],
+    );
+  }
+}
+
+double _parseAmount(String s) =>
+    double.tryParse(s.replaceAll(RegExp(r'[^0-9.]'), '')) ?? 0;
+
+InputDecoration _inputDec(SottoColors c, String hint) => InputDecoration(
+      hintText: hint,
+      filled: true,
+      fillColor: c.surface,
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+      hintStyle: TextStyle(color: c.ter, fontSize: 15, fontWeight: FontWeight.w500),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.hair2, width: 0.5)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.hair2, width: 0.5)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: c.text, width: 1)),
+    );
+
+/// A styled wizard text field. `number` swaps in the numeric keyboard.
+class _WizField extends StatelessWidget {
+  final TextEditingController controller;
+  final String hint;
+  final bool number;
+  final ValueChanged<String> onChanged;
+  const _WizField({required this.controller, required this.hint, required this.onChanged, this.number = false});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sotto;
+    return TextField(
+      controller: controller,
+      keyboardType: number ? const TextInputType.numberWithOptions(decimal: true) : TextInputType.text,
+      onChanged: onChanged,
+      decoration: _inputDec(c, hint),
+      style: TextStyle(color: c.text, fontSize: 16, fontWeight: FontWeight.w600, letterSpacing: -0.2),
+    );
+  }
+}
+
+/// Editable contributor roster. Owns a controller set per row so adding/removing
+/// a payee never disturbs the others' cursors; emits the named rows up on change.
+class _RosterEditor extends StatefulWidget {
+  final List<RailRecipient> value;
+  final double threshold;
+  final ValueChanged<List<RailRecipient>> onChange;
+  const _RosterEditor({required this.value, required this.threshold, required this.onChange});
+
+  @override
+  State<_RosterEditor> createState() => _RosterEditorState();
+}
+
+class _RosterRow {
+  final int id;
+  final TextEditingController name;
+  final TextEditingController role;
+  final TextEditingController amount;
+  _RosterRow(this.id, RailRecipient r)
+      : name = TextEditingController(text: r.name),
+        role = TextEditingController(text: r.role),
+        amount = TextEditingController(text: r.amount > 0 ? r.amount.toStringAsFixed(0) : '');
+
+  RailRecipient toRecipient() =>
+      RailRecipient(name: name.text.trim(), role: role.text.trim(), amount: _parseAmount(amount.text));
+
+  void dispose() {
+    name.dispose();
+    role.dispose();
+    amount.dispose();
+  }
+}
+
+class _RosterEditorState extends State<_RosterEditor> {
+  late final List<_RosterRow> _rows;
+  int _seq = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _rows = widget.value.map((r) => _RosterRow(_seq++, r)).toList();
+    if (_rows.isEmpty) _rows.add(_RosterRow(_seq++, const RailRecipient(name: '', role: '', amount: 0)));
+  }
+
+  @override
+  void dispose() {
+    for (final r in _rows) {
+      r.dispose();
+    }
+    super.dispose();
+  }
+
+  void _emit() => widget.onChange(
+        _rows.map((r) => r.toRecipient()).where((r) => r.name.isNotEmpty).toList(),
+      );
+
+  void _add() {
+    setState(() => _rows.add(_RosterRow(_seq++, const RailRecipient(name: '', role: '', amount: 0))));
+    _emit();
+  }
+
+  void _remove(int id) {
+    setState(() {
+      final i = _rows.indexWhere((r) => r.id == id);
+      if (i >= 0) {
+        _rows[i].dispose();
+        _rows.removeAt(i);
+      }
+    });
+    _emit();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sotto;
+    final total = _rows.fold<double>(0, (a, r) => a + _parseAmount(r.amount.text));
+    final count = _rows.where((r) => r.name.text.trim().isNotEmpty).length;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final row in _rows)
+          Padding(
+            key: ValueKey(row.id),
+            padding: const EdgeInsets.only(bottom: 10),
+            child: _card(c, row),
+          ),
+        GestureDetector(
+          onTap: _add,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 14),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(13),
+              border: Border.all(color: c.hair2, width: 1),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SottoIcon('plus', size: 17, weight: 2.2, color: c.text),
+                const SizedBox(width: 8),
+                Text('Add recipient',
+                    style: TextStyle(color: c.text, fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: -0.2)),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('$count recipient${count == 1 ? '' : 's'}',
+                style: TextStyle(color: c.sec, fontSize: 13.5, fontWeight: FontWeight.w600)),
+            Text('${fmt0(total)} USDCx',
+                style: TextStyle(color: c.text, fontSize: 13.5, fontWeight: FontWeight.w700, letterSpacing: -0.2)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _card(SottoColors c, _RosterRow row) {
+    final over = _parseAmount(row.amount.text) > widget.threshold;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(13, 12, 10, 13),
+      decoration: BoxDecoration(
+        color: c.surface,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: c.hair2, width: 0.5),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _WizField(
+                  controller: row.name,
+                  hint: 'Name',
+                  onChanged: (_) {
+                    _emit();
+                    setState(() {});
+                  },
+                ),
+              ),
+              GestureDetector(
+                onTap: () => _remove(row.id),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 4, 4),
+                  child: SottoIcon('x', size: 18, weight: 2, color: c.ter),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                flex: 3,
+                child: _WizField(controller: row.role, hint: 'Role', onChanged: (_) => _emit()),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: _WizField(
+                  controller: row.amount,
+                  hint: 'USDCx',
+                  number: true,
+                  onChanged: (_) {
+                    _emit();
+                    setState(() {});
+                  },
+                ),
+              ),
+            ],
+          ),
+          if (over) ...[
+            const SizedBox(height: 9),
+            Row(
+              children: [
+                SottoIcon('shield', size: 14, color: c.ter),
+                const SizedBox(width: 7),
+                Text('Over threshold — needs approval to settle',
+                    style: TextStyle(color: c.sec, fontSize: 12.5)),
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

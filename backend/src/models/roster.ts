@@ -1,7 +1,7 @@
 // The demo's narrative: the org's contributor roster and the seed mandate.
 // Each recipient becomes a Canton party at bootstrap.
 
-import { RailConfig } from './types.ts';
+import { RailConfig, RecipientInput } from './types.ts';
 
 export interface RecipientMeta {
   id: string;
@@ -38,3 +38,25 @@ export const DEFAULT_CONFIG: RailConfig = {
   auditor: 'Hale & Co.',
   auditorRole: 'External audit',
 };
+
+/** A Canton party-id hint: alphanumeric only, optionally salted for uniqueness. */
+const alnum = (s: string): string => s.replace(/[^a-zA-Z0-9]/g, '');
+export const partyHint = (name: string, salt = ''): string =>
+  `${alnum(name).slice(0, 24) || 'Party'}${alnum(salt)}`;
+
+/** Resolve the roster a config asks for: the editable list, or the default. */
+export function rosterFor(cfg: RailConfig): RecipientMeta[] {
+  if (!cfg.recipients?.length) return [...RECIPIENTS];
+  return cfg.recipients.map((r: RecipientInput, i: number): RecipientMeta => {
+    const id = r.id?.trim() || `r${i + 1}`;
+    const first = r.name.trim().split(/\s+/)[0]?.toLowerCase() ?? 'payee';
+    return {
+      id,
+      hint: partyHint(r.name, id), // salted with id so same-named payees stay distinct
+      name: r.name.trim(),
+      role: r.role.trim(),
+      handle: r.handle?.trim() || `${alnum(first) || 'payee'}.${alnum(cfg.org).toLowerCase() || 'rail'}`,
+      amount: r.amount,
+    };
+  });
+}
