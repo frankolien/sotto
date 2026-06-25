@@ -10,6 +10,7 @@ import '../../../../core/widgets/wallet.dart';
 import '../../../shell/presentation/state/shell_providers.dart';
 import '../../domain/entities/ledger_state.dart';
 import '../state/ledger_providers.dart';
+import '../widgets/sync_badge.dart';
 
 class AuditorHome extends ConsumerWidget {
   const AuditorHome({super.key});
@@ -28,7 +29,7 @@ class AuditorHome extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AccountHeader(name: s.mandate.auditor, sub: 'Auditor · read-only · tap to switch view', onOpen: shell.openRoles),
+          AccountHeader(name: s.mandate.auditor, sub: 'Auditor · read-only · tap to switch view', onOpen: shell.openRoles, right: const SyncBadge()),
           HomeBody(children: [
             BigBalance(label: 'Batch ${b.id} · full visibility', value: total),
             Padding(

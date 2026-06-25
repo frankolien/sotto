@@ -27,8 +27,10 @@ class AccountScreen extends ConsumerWidget {
 
     void reset() {
       ref.read(ledgerControllerProvider.notifier).reset();
-      shell.toOnboarding();
+      shell.restart();
     }
+
+    void signOut() => shell.toSignIn();
 
     return SingleChildScrollView(
       child: Column(
@@ -77,6 +79,7 @@ class AccountScreen extends ConsumerWidget {
                 ],
               ),
             ),
+            AppButton(label: 'Sign out', variant: BtnVariant.secondary, onTap: signOut),
             _ResetButton(onTap: reset),
             Center(
               child: Text('Sotto · confidential payouts on Canton',

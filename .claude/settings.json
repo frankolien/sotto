@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dpm sandbox *)",
+      "Bash(npm -v)",
+      "Bash(npx --yes create-next-app@latest web --typescript --tailwind --eslint --app --no-src-dir --import-alias \"@/*\" --use-npm --turbopack --disable-git)",
+      "Bash(echo \"scaffold started, pid $!\")",
+      "WebFetch(domain:www.designmd.run)",
+      "WebFetch(domain:jaconir.online)",
+      "WebFetch(domain:www.setproduct.com)",
+      "WebFetch(domain:framiq.app)",
+      "WebFetch(domain:vercel.com)"
+    ]
+  }
+}

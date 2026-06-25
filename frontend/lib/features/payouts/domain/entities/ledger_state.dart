@@ -123,6 +123,7 @@ class LedgerState {
   final String recipientName; // identity the Recipient lens represents
   final Mandate mandate;
   final Batch batch;
+  final List<ActivityEntry> activity; // real on-ledger activity (newest first)
 
   const LedgerState({
     required this.treasury,
@@ -130,6 +131,7 @@ class LedgerState {
     required this.mandate,
     required this.batch,
     this.recipientName = '',
+    this.activity = const [],
   });
 
   /// A line needs a second signer when it exceeds the mandate threshold.
@@ -146,6 +148,7 @@ class LedgerState {
     String? recipientName,
     Mandate? mandate,
     Batch? batch,
+    List<ActivityEntry>? activity,
   }) =>
       LedgerState(
         treasury: treasury ?? this.treasury,
@@ -153,6 +156,7 @@ class LedgerState {
         recipientName: recipientName ?? this.recipientName,
         mandate: mandate ?? this.mandate,
         batch: batch ?? this.batch,
+        activity: activity ?? this.activity,
       );
 
   /// The seed scenario: one batch where five lines auto-settle and one exceeds
@@ -185,25 +189,4 @@ class LedgerState {
           ],
         ),
       );
-
-  /// Seeded activity so each wallet feed feels lived-in.
-  static const List<ActivityGroup> payerHistory = [
-    ActivityGroup(day: '12 Oct 2025', rows: [
-      ActivityItem(name: 'Tobi Adeyemi', sub: 'Contractor payout', amount: 3850, dir: ActivityDir.out),
-      ActivityItem(name: 'Chen Wei', sub: 'Contractor payout', amount: 5500, dir: ActivityDir.out),
-    ]),
-    ActivityGroup(day: '28 Sep 2025', rows: [
-      ActivityItem(name: 'Treasury top-up', sub: 'USDCx deposit', amount: 250000, dir: ActivityDir.income),
-      ActivityItem(name: 'Diego Marquez', sub: 'Contractor payout', amount: 2900, dir: ActivityDir.out),
-    ]),
-  ];
-
-  static const List<ActivityGroup> recipientHistory = [
-    ActivityGroup(day: '14 May 2025', rows: [
-      ActivityItem(name: 'Lumen Studio', sub: 'April payout · Sound design', amount: 3900, dir: ActivityDir.income),
-    ]),
-    ActivityGroup(day: '02 Apr 2025', rows: [
-      ActivityItem(name: 'Lumen Studio', sub: 'March payout · Sound design', amount: 3600, dir: ActivityDir.income),
-    ]),
-  ];
 }

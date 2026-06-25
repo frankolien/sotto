@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/icons/sotto_icon.dart';
+import '../../../../core/motion/motion.dart';
 import '../../../../core/theme/sotto_colors.dart';
 import '../../../../core/utils/format.dart';
 import '../../../../core/widgets/primitives.dart';
@@ -40,19 +41,32 @@ class DoneScreen extends ConsumerWidget {
                   Column(
                     children: [
                       const SizedBox(height: 6),
-                      Container(
-                        width: 60,
-                        height: 60,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(shape: BoxShape.circle, color: c.signal ?? c.inv),
-                        child: SottoIcon('check', size: 32, weight: 2.6, color: c.signal != null ? Colors.white : c.invText),
+                      TweenAnimationBuilder<double>(
+                        tween: Tween(begin: 0, end: 1),
+                        duration: const Duration(milliseconds: 480),
+                        curve: Motion.emphasized,
+                        builder: (_, t, child) =>
+                            Transform.scale(scale: t, child: Opacity(opacity: t.clamp(0, 1), child: child)),
+                        child: Container(
+                          width: 60,
+                          height: 60,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(shape: BoxShape.circle, color: c.signal ?? c.inv),
+                          child: SottoIcon('check', size: 32, weight: 2.6, color: c.signal != null ? Colors.white : c.invText),
+                        ),
                       ),
                       const SizedBox(height: 14),
-                      Text('Batch settled',
-                          style: TextStyle(color: c.text, fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.5)),
+                      Reveal(
+                        delay: const Duration(milliseconds: 140),
+                        child: Text('Batch settled',
+                            style: TextStyle(color: c.text, fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.5)),
+                      ),
                       const SizedBox(height: 5),
-                      Text('${settled.length} of ${b.lines.length} paid · ${fmt(settledSum)} USDCx',
-                          style: TextStyle(color: c.sec, fontSize: 14.5)),
+                      Reveal(
+                        delay: const Duration(milliseconds: 200),
+                        child: Text('${settled.length} of ${b.lines.length} paid · ${fmt(settledSum)} USDCx',
+                            style: TextStyle(color: c.sec, fontSize: 14.5)),
+                      ),
                       const SizedBox(height: 8),
                     ],
                   ),

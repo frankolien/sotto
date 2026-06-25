@@ -12,6 +12,29 @@ This repository is the **hackathon MVP** for *Build on Canton* (ENCODE Club, kic
 
 ---
 
+## Judges — start here
+
+1. **Run the web console** (the submission surface):
+   ```bash
+   cd web && npm install && npm run dev
+   ```
+   Open **http://localhost:3000**, click **See it live**, then switch the identity
+   (Payer / Recipient / Approver / Auditor) to watch the *same* batch project a
+   different view to each party.
+2. **Watch the 3-minute story:** the shot-by-shot script is in [web/DEMO.md](web/DEMO.md).
+   The pitch outline is in [docs/DECK.md](docs/DECK.md).
+3. **See that it's real on Canton:** the privacy and settlement the console shows are
+   proven by the Daml model and the backend below — run `dpm test` (last section) to
+   watch each party's visibility get *asserted*, not just narrated.
+
+> **Honesty note:** the web console runs on **seeded sample figures** so the demo is
+> rock-solid and never depends on a live chain being up. The confidentiality and atomic
+> settlement it shows are the *real* mechanism — implemented in the Daml model and the
+> Canton-backed backend in this same repo. The console's data layer is shaped to swap
+> those seeds for the live API behind the same interface.
+
+---
+
 ## The privacy model (the whole point)
 
 | Contract | Signatory | Observer | What it guarantees |
@@ -29,20 +52,35 @@ sotto/
     sotto/         # the four confidential-payout templates (uploaded to participants)
     sotto-tests/   # the runnable demo + privacy assertions (data-depends on sotto)
     multi-package.yaml
-  backend/         # thin service over Canton's JSON Ledger API (REST -> ledger)  [pending]
-  frontend/        # Flutter app: one surface, role switcher (payer/recipient/auditor)  [pending]
-  docs/            # litepaper + build handoff
+  backend/         # REST service over Canton's JSON Ledger API; RS256/JWKS auth, JIT wallets
+  web/             # Next.js console + landing — the hackathon submission surface
+  frontend/        # Flutter app: one surface, role switcher — the long-term client
+  docs/            # litepaper, build handoff, pitch deck outline
 ```
 
 The Daml is split the way cn-quickstart splits `licensing` / `licensing-tests`: the
 templates package carries no `daml-script` dependency, so the DAR uploaded to a
 participant stays lean. The scripts (and the privacy proofs) live in `sotto-tests`.
 
+## Surfaces
+
+- **`web/`** — the submission. A premium Next.js 16 + Tailwind v4 console and landing
+  page. Dark-first, monochrome + one indigo accent, IBM Plex Mono for ledger figures.
+  Four identities (payer/recipient/approver/auditor) each get a real dashboard view of
+  one shared batch. Self-contained sample data; light/dark theme; deep-linkable via
+  `?lens=` and `?view=`. See [web/README.md](web/README.md).
+- **`backend/`** — a thin REST service over Canton's JSON Ledger API. RS256/JWKS auth
+  (Canton's `jwt-jwks` token type), just-in-time wallet provisioning per subject, and
+  read/write of real `Holding` / `DisbursementReceipt` contracts.
+- **`frontend/`** — the Flutter client, the long-term product surface. Same four-lens
+  story, mobile-native.
+
 ## Toolchain
 
 - **Daml SDK via `dpm`** (Digital Asset Package Manager) — the model targets Daml 3.x (Canton 3.x), matching `cn-quickstart`.
+- **Node 20** — backend (TypeScript/Express) and the web app (Next.js 16).
 - **Docker** — for a local Canton network when the demo moves on-ledger.
-- **Flutter** — the UI surface.
+- **Flutter** — the long-term mobile surface.
 
 ## Status
 
@@ -50,12 +88,27 @@ participant stays lean. The scripts (and the privacy proofs) live in `sotto-test
 - [x] Daml SDK (`dpm`) installed; model **compiles on 3.4.11** (cn-quickstart's pin) and 3.5.1
 - [x] `demo` script **green with per-party privacy assertions** — the asymmetry is machine-checked, not just narrated
 - [x] Templates split from scripts (lean upload DAR), mirroring cn-quickstart
-- [ ] Local Canton network (cn-quickstart LocalNet) + Sotto DAR deployed
-- [ ] Thin backend over the JSON Ledger API
-- [ ] Flutter UI with the three role-switched views
-- [ ] Deployed live URL + 3-minute demo video
+- [x] Thin backend over the JSON Ledger API — RS256/JWKS auth, JIT wallet provisioning
+- [x] **Web console + landing** — four-lens dashboards, atomic-payout demo, light/dark
+- [x] Flutter client — four-lens story on mobile
+- [x] Demo video script + pitch deck outline ([web/DEMO.md](web/DEMO.md), [docs/DECK.md](docs/DECK.md))
+- [ ] Local Canton network (cn-quickstart LocalNet) + Sotto DAR deployed end-to-end
+- [ ] Deployed live URL + recorded 3-minute demo video
 
-## Quick start (Daml model)
+## Quick start — web console (the demo)
+
+Requires Node 20+.
+
+```bash
+cd web
+npm install
+npm run dev        # http://localhost:3000
+```
+
+Landing page → **See it live** → switch identity to see one batch through four lenses.
+Recording walkthrough: [web/DEMO.md](web/DEMO.md).
+
+## Quick start — Daml model (the proof)
 
 Requires the Daml SDK (`dpm`). Install: `curl https://get.digitalasset.com/install/install.sh | sh`.
 
@@ -69,6 +122,6 @@ Expected: `Sotto/Scripts/Demo.daml:demo: ok, 9 active contracts, 7 transactions.
 
 > The `demo` script in [daml/sotto-tests/daml/Sotto/Scripts/Demo.daml](daml/sotto-tests/daml/Sotto/Scripts/Demo.daml)
 > allocates parties, funds a treasury, runs an atomic batch, shows an over-threshold payment rejected by
-> `Disburse` and then approved via the maker-checker `LargePaymentProposal` — then **asserts** that Ada sees only
-> her 2 receipts, Kola only his 1, the auditor all 3, recipients see only holdings they own, and the mandate is
+> `Disburse` and then approved via the maker-checker `LargePaymentProposal` — then **asserts** that each recipient
+> sees only their own receipt, the auditor all of them, recipients see only holdings they own, and the mandate is
 > invisible to recipients. That is the entire privacy story, proven before any UI exists.

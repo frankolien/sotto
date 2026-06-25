@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/icons/sotto_icon.dart';
 import '../../../../core/theme/sotto_colors.dart';
+import '../../../../core/widgets/primitives.dart';
 import '../../../../core/widgets/sheet.dart';
 import '../../../payouts/domain/entities/role.dart';
 import '../../../payouts/presentation/state/ledger_providers.dart';
@@ -27,7 +28,7 @@ class RoleSwitchSheet extends ConsumerWidget {
           Role.approver => s.mandate.approver.isNotEmpty ? s.mandate.approver : 'Priya Raman',
           Role.recipient => s.recipientName.isNotEmpty ? s.recipientName : 'Recipient',
         };
-
+        
     return SottoSheet(
       onClose: shell.closeRoles,
       child: Column(
@@ -54,7 +55,7 @@ class RoleSwitchSheet extends ConsumerWidget {
           GestureDetector(
             onTap: () {
               ref.read(ledgerControllerProvider.notifier).reset();
-              shell.toOnboarding();
+              shell.restart();
             },
             child: Padding(
               padding: const EdgeInsets.all(10),
@@ -80,7 +81,7 @@ class _RoleRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = context.sotto;
     final fg = active ? c.invText : c.text;
-    return GestureDetector(
+    return Pressable(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 14),

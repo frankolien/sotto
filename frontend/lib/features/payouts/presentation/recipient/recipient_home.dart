@@ -8,8 +8,8 @@ import '../../../../core/widgets/primitives.dart';
 import '../../../../core/widgets/wallet.dart';
 import '../../../shell/presentation/state/shell_providers.dart';
 import '../../domain/entities/activity.dart';
-import '../../domain/entities/ledger_state.dart';
 import '../state/ledger_providers.dart';
+import '../widgets/sync_badge.dart';
 
 class RecipientHome extends ConsumerWidget {
   const RecipientHome({super.key});
@@ -21,31 +21,16 @@ class RecipientHome extends ConsumerWidget {
     final shell = ref.read(shellControllerProvider.notifier);
     final name = s.recipientName.isNotEmpty ? s.recipientName : 'Recipient';
 
-    // On real Canton this list holds only this recipient's own line — the rest
-    // of the batch is not theirs to see, so it never reaches the client.
-    final ownLines = s.batch.lines.where((l) => l.you).toList();
-    final mine = ownLines.isEmpty ? null : ownLines.first;
-    final settled = mine != null && mine.status == LineStatus.settled;
-
-    final histIn = LedgerState.recipientHistory
-        .expand((g) => g.rows)
-        .where((r) => r.dir == ActivityDir.income)
-        .fold<double>(0, (a, r) => a + r.amount);
-    final balance = histIn + (settled ? mine.amount : 0);
-
-    final groups = <ActivityGroup>[
-      if (settled)
-        ActivityGroup(day: 'Today', rows: [
-          ActivityItem(name: s.org, sub: '${mine.role} · ${s.batch.id}', amount: mine.amount, dir: ActivityDir.income),
-        ]),
-      ...LedgerState.recipientHistory,
-    ];
+    // The recipient's real on-ledger balance (their own Holding) and real
+    // activity (only their own receipt is ever visible to them — Canton's choice).
+    final balance = s.treasury;
+    final groups = groupActivity(s.activity);
 
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AccountHeader(name: name, sub: 'Recipient · tap to switch view', onOpen: shell.openRoles),
+          AccountHeader(name: name, sub: 'Recipient · tap to switch view', onOpen: shell.openRoles, right: const SyncBadge()),
           HomeBody(children: [
             BigBalance(label: 'Total balance', value: balance),
             AppButton(
@@ -59,6 +44,12 @@ class RecipientHome extends ConsumerWidget {
               children: [
                 Text('Activity',
                     style: TextStyle(color: c.text, fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.3)),
+                if (groups.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Text('No payments yet — when a batch settles, your receipt lands here.',
+                        style: TextStyle(color: c.sec, fontSize: 13.5, height: 1.4)),
+                  ),
                 for (final g in groups)
                   Padding(
                     padding: const EdgeInsets.only(top: 8),

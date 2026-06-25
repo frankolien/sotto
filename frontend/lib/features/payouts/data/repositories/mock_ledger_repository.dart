@@ -1,3 +1,5 @@
+import '../../domain/entities/activity.dart';
+import '../../domain/entities/ledger_info.dart';
 import '../../domain/entities/ledger_state.dart';
 import '../../domain/entities/rail_config.dart';
 import '../../domain/entities/role.dart';
@@ -90,6 +92,22 @@ class MockLedgerRepository implements LedgerRepository {
   }
 
   @override
+  Future<LedgerInfo> ledgerInfo(Role role) async {
+    // No real ledger offline — a plausible stand-in so the sheet still renders.
+    final s = _state;
+    final contracts = <ContractRef>[
+      if (role == Role.payer) ...[
+        ContractRef(template: 'Holding', cid: 'demo-treasury', amount: s.treasury, label: 'Treasury'),
+        const ContractRef(template: 'PayoutMandate', cid: 'demo-mandate', amount: null, label: 'Spending mandate'),
+      ],
+      for (final l in s.batch.lines)
+        if (l.status == LineStatus.settled && (role == Role.payer || role == Role.auditor || l.you))
+          ContractRef(template: 'DisbursementReceipt', cid: 'demo-rcpt-${l.id}', amount: l.amount, label: 'Receipt · ${l.name}'),
+    ];
+    return _async(LedgerInfo(party: 'demo::offline', offset: 0, contracts: contracts));
+  }
+
+  @override
   Future<LedgerState> stateFor(Role role) async {
     final s = _state;
     List<PayoutLine> lines;
@@ -104,8 +122,27 @@ class MockLedgerRepository implements LedgerRepository {
         lines = mine.isNotEmpty && mine.first.status == LineStatus.settled ? mine : [];
     }
     final visible = role != Role.recipient;
+    double bal = 0;
+    if (role == Role.payer) {
+      bal = s.treasury;
+    } else if (role == Role.recipient) {
+      final mine = s.batch.lines.where((l) => l.you);
+      bal = mine.isNotEmpty && mine.first.status == LineStatus.settled ? mine.first.amount : 0;
+    }
+    final activity = <ActivityEntry>[
+      for (final l in s.batch.lines)
+        if (l.status == LineStatus.settled && (role == Role.payer || role == Role.auditor || l.you))
+          ActivityEntry(
+            name: role == Role.recipient ? s.org : l.name,
+            sub: role == Role.recipient ? 'Payout · ${s.batch.id}' : 'Contributor payout · ${s.batch.id}',
+            amount: l.amount,
+            income: role == Role.recipient,
+            at: DateTime.now(),
+            cid: 'demo-rcpt-${l.id}',
+          ),
+    ];
     return _async(LedgerState(
-      treasury: role == Role.payer ? s.treasury : 0,
+      treasury: bal,
       org: s.org,
       recipientName: s.recipientName,
       mandate: visible
@@ -114,6 +151,7 @@ class MockLedgerRepository implements LedgerRepository {
               name: '', cap: 0, threshold: 0, approver: '', approverRole: '',
               auditor: '', auditorRole: '', recipients: 0),
       batch: Batch(id: s.batch.id, label: s.batch.label, status: s.batch.status, lines: lines),
+      activity: activity,
     ));
   }
 }

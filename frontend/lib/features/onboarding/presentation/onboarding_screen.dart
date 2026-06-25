@@ -1,15 +1,18 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/icons/mark.dart';
 import '../../../core/icons/sotto_icon.dart';
+import '../../../core/motion/motion.dart';
 import '../../../core/theme/sotto_colors.dart';
 import '../../../core/utils/format.dart';
 import '../../../core/widgets/primitives.dart';
 import '../../payouts/domain/entities/rail_config.dart';
+import '../../payouts/domain/entities/role.dart';
 import '../../payouts/presentation/state/ledger_providers.dart';
 import '../../shell/presentation/state/shell_providers.dart';
-import '../domain/entities/concept.dart';
 import '../domain/entities/setup_draft.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -26,7 +29,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     if (cfg != null) {
       ref.read(ledgerControllerProvider.notifier).configure(cfg.toRailConfig());
     }
-    ref.read(shellControllerProvider.notifier).enterApp();
+    ref.read(shellControllerProvider.notifier).toSignIn();
   }
 
   @override
@@ -37,19 +40,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       child: Padding(
         padding: const EdgeInsets.only(top: 52),
         child: switch (_view) {
-          'concept' => _Concept(
-              onBack: () => setState(() => _view = 'welcome'),
-              onDone: () => setState(() => _view = 'setup'),
-            ),
           'setup' => _Setup(
               draft: _draft,
               onChange: (d) => setState(() => _draft = d),
-              onBack: () => setState(() => _view = 'concept'),
+              onBack: () => setState(() => _view = 'welcome'),
               onFinish: () => _finish(_draft),
             ),
-          _ => _Welcome(
-              onStart: () => setState(() => _view = 'concept'),
-              onSkip: () => _finish(null),
+          _ => _BatchHero(
+              onStepIn: () => _finish(null),
+              onTune: () => setState(() => _view = 'setup'),
             ),
         },
       ),
@@ -57,49 +56,260 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 }
 
-// ── Welcome ──
-class _Welcome extends StatelessWidget {
-  final VoidCallback onStart;
-  final VoidCallback onSkip;
-  const _Welcome({required this.onStart, required this.onSkip});
+// ── The Batch — the interactive hero. The SAME six-row ledger, re-rendered live
+//    for each lens, IS the demonstration: tap a role and watch what it may see. ──
+
+/// One contributor line in the sample batch (mirrors the demo's seed roster).
+class _BatchRow {
+  final String name;
+  final String role;
+  final double amount;
+  const _BatchRow(this.name, this.role, this.amount);
+}
+
+const double _kThreshold = 25000;
+const int _kYou = 0; // the Recipient lens follows Amara (row 0)
+const double _kTotal = 52550; // verified sum of the six amounts below
+const List<_BatchRow> _kBatch = [
+  _BatchRow('Amara Okafor', 'Sound design', 4200),
+  _BatchRow('Tobi Adeyemi', 'Motion', 3850),
+  _BatchRow('Chen Wei', 'Edit', 5500),
+  _BatchRow('Diego Marquez', 'Color', 2900),
+  _BatchRow('Fatima Bello', 'Production', 4100),
+  _BatchRow('Kwame Nyong', 'Score · milestone', 32000), // over threshold → needs approval
+];
+
+// ── Monospace "ledger" type — amounts, captions and labels read like a precise
+//    financial instrument (IBM Plex Mono). ──
+const String _kMono = 'IBMPlexMono';
+
+TextStyle _monoStyle(Color color,
+        {double size = 11.5, double ls = 0.4, FontWeight weight = FontWeight.w600, double height = 1.4}) =>
+    TextStyle(fontFamily: _kMono, color: color, fontSize: size, fontWeight: weight, letterSpacing: ls, height: height);
+
+/// The hero's lens-aware lead line — written from the active party's point of view.
+String _heroSub(Role lens) => switch (lens) {
+      Role.payer => "You're Lumen Studio. You see every name, role and amount before it leaves.",
+      Role.recipient => "You're Amara Okafor. You see your own line — and nothing else in the batch.",
+      Role.auditor => "You're Hale & Co. Every receipt, read-only. Visibility is granted, never assumed.",
+      Role.approver => "You're Priya Raman. Only what crosses the threshold needs a second signer.",
+    };
+
+/// What the active lens is allowed to reveal — the caption above the ledger.
+String _reveals(Role lens) => switch (lens) {
+      Role.payer => 'Reveals · names · roles · amounts · total',
+      Role.recipient => 'Reveals · your own line only',
+      Role.auditor => 'Reveals · every receipt · read-only',
+      Role.approver => 'Reveals · over-threshold only',
+    };
+
+/// The ledger footer per lens: (label, sub-line, amount).
+(String, String, double) _footerFor(Role lens) => switch (lens) {
+      Role.payer => ('Batch total', '6 contributors · 1 confidential transfer', _kTotal),
+      Role.recipient => ('Your payment', "1 of 6 · the rest aren't yours to see", _kBatch[_kYou].amount),
+      Role.auditor => ('Auditor view', '6 of 6 receipts · read-only', _kTotal),
+      Role.approver => ('Needs your signature', '1 of 6 · over the 25,000 threshold', 32000),
+    };
+
+/// A monospaced amount with a greyed USDCx suffix — the ledger's numerals.
+class _Amount extends StatelessWidget {
+  final double value;
+  final double size;
+  final bool dim;
+  const _Amount(this.value, {this.size = 15.5, this.dim = false});
 
   @override
   Widget build(BuildContext context) {
     final c = context.sotto;
+    return Text.rich(
+      TextSpan(children: [
+        TextSpan(
+            text: fmt(value),
+            style: TextStyle(fontFamily: _kMono, fontSize: size, fontWeight: FontWeight.w700, color: dim ? c.ter : c.text, letterSpacing: -0.3)),
+        TextSpan(
+            text: ' USDCx',
+            style: TextStyle(fontFamily: _kMono, fontSize: size * 0.6, fontWeight: FontWeight.w500, color: c.ter)),
+      ]),
+      maxLines: 1,
+      softWrap: false,
+      overflow: TextOverflow.visible,
+    );
+  }
+}
+
+/// A monospaced outline pill (the "SAMPLE BATCH ›" tag).
+class _MonoTag extends StatelessWidget {
+  final String text;
+  const _MonoTag(this.text);
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sotto;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(11, 6, 8, 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: c.hair2, width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(text.toUpperCase(), style: _monoStyle(c.text, size: 11, ls: 0.6, height: 1.0)),
+          const SizedBox(width: 5),
+          SottoIcon('fwd', size: 12, weight: 2, color: c.ter),
+        ],
+      ),
+    );
+  }
+}
+
+class _BatchHero extends StatefulWidget {
+  final VoidCallback onStepIn;
+  final VoidCallback onTune;
+  const _BatchHero({required this.onStepIn, required this.onTune});
+  @override
+  State<_BatchHero> createState() => _BatchHeroState();
+}
+
+class _BatchHeroState extends State<_BatchHero> {
+  Role _lens = Role.payer;
+  final Set<Role> _seen = {Role.payer};
+  Timer? _auto;
+  bool _userTook = false;
+
+  /// Under the test binding the auto-advance Timer must never start — a
+  /// perpetually scheduling frame makes `pumpAndSettle()` time out. Detected by
+  /// binding type so no test setup is needed (and it stays web-safe).
+  bool get _inTest => WidgetsBinding.instance.runtimeType.toString().contains('Test');
+
+  @override
+  void initState() {
+    super.initState();
+    // The tour performs itself — walk the four lenses on a timer so the user sees
+    // the redaction happen without lifting a finger. The first tap hands over
+    // control and ends the tour. Off under tests / reduce-motion.
+    if (!_inTest) {
+      _auto = Timer.periodic(const Duration(milliseconds: 2200), (_) {
+        if (!mounted || _userTook || Motion.reduced(context)) return;
+        final roles = Role.values;
+        final next = roles[(roles.indexOf(_lens) + 1) % roles.length];
+        setState(() {
+          _lens = next;
+          _seen.add(next);
+        });
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _auto?.cancel();
+    super.dispose();
+  }
+
+  void _select(Role r) {
+    _userTook = true; // the user is driving now — stop the tour
+    _auto?.cancel();
+    if (r == _lens) return;
+    setState(() {
+      _lens = r;
+      _seen.add(r);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sotto;
+    final seenAll = _seen.length == Role.values.length;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(26, 0, 26, 26),
+      padding: const EdgeInsets.fromLTRB(22, 4, 22, 20),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
+          // Wordmark + an honest "this is sample data" tag.
+          Reveal(
+            child: Row(
               children: [
-                SottoMark(size: 56, color: c.text),
-                const SizedBox(height: 22),
+                SottoMark(size: 24, color: c.text),
+                const SizedBox(width: 9),
                 Text('Sotto',
-                    style: TextStyle(color: c.text, fontSize: 44, fontWeight: FontWeight.w700, letterSpacing: -0.5)),
-                const SizedBox(height: 14),
-                Text('Confidential payout infrastructure.',
-                    style: TextStyle(color: c.text, fontSize: 19, fontWeight: FontWeight.w600, letterSpacing: -0.3, height: 1.25)),
-                const SizedBox(height: 10),
-                Text(
-                  'Pay many people in one batch. Each sees only their own payment. An auditor verifies everything. Privacy is a property of the rail — not a feature of the app.',
-                  style: TextStyle(color: c.sec, fontSize: 15.5, height: 1.5, letterSpacing: -0.1),
-                ),
+                    style: TextStyle(color: c.text, fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.5)),
+                const Spacer(),
+                const _MonoTag('Sample batch'),
               ],
             ),
           ),
-          AppButton(label: 'Set up your rail', icon: 'fwd', onTap: onStart),
+          const SizedBox(height: 22),
+          Reveal(
+            delay: const Duration(milliseconds: 60),
+            child: Text('One batch.\nFour kinds of eyes.',
+                style: TextStyle(color: c.text, fontSize: 30, fontWeight: FontWeight.w800, letterSpacing: -0.7, height: 1.05)),
+          ),
           const SizedBox(height: 12),
-          GestureDetector(
-            onTap: onSkip,
+          // Lens-aware lead line, monospaced, written from the active party's POV.
+          Reveal(
+            delay: const Duration(milliseconds: 110),
+            child: SizedBox(
+              height: 58,
+              child: AnimatedSwitcher(
+                duration: Motion.base,
+                child: Align(
+                  key: ValueKey(_lens),
+                  alignment: Alignment.topLeft,
+                  child: Text(_heroSub(_lens).toUpperCase(),
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: _monoStyle(c.sec, size: 11.5, ls: 0.3, weight: FontWeight.w500, height: 1.6)),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          Reveal(delay: const Duration(milliseconds: 160), child: _LensBar(active: _lens, onChanged: _select)),
+          const SizedBox(height: 12),
+          // What THIS lens is allowed to reveal — relabels the demonstration live.
+          SizedBox(
+            height: 16,
+            child: AnimatedSwitcher(
+              duration: Motion.base,
+              child: Align(
+                key: ValueKey('rev-$_lens'),
+                alignment: Alignment.centerLeft,
+                child: Text(_reveals(_lens).toUpperCase(),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: _monoStyle(c.ter, size: 11, ls: 0.5, height: 1.0)),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          // The ledger — scrolls internally on a short device.
+          Expanded(
+            child: Reveal(
+              delay: const Duration(milliseconds: 210),
+              child: SingleChildScrollView(child: _LedgerCard(lens: _lens)),
+            ),
+          ),
+          const SizedBox(height: 14),
+          _LensProgress(seen: _seen),
+          const SizedBox(height: 14),
+          // The no-friction path is now PRIMARY; configuration is the opt-in. The
+          // CTA is always tappable but stays at low emphasis until all four lenses
+          // have been seen — never trapped, just nudged.
+          AnimatedOpacity(
+            duration: Motion.base,
+            opacity: seenAll ? 1.0 : 0.6,
+            child: AppButton(label: 'Step into the rail', icon: 'fwd', onTap: widget.onStepIn),
+          ),
+          const SizedBox(height: 6),
+          Pressable(
+            onTap: widget.onTune,
+            haptic: false,
             child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Text('Skip to the demo',
+              padding: const EdgeInsets.all(9),
+              child: Text('Tune the numbers first',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: c.sec, fontSize: 15, fontWeight: FontWeight.w600)),
+                  style: TextStyle(color: c.sec, fontSize: 14.5, fontWeight: FontWeight.w600, letterSpacing: -0.1)),
             ),
           ),
         ],
@@ -108,90 +318,66 @@ class _Welcome extends StatelessWidget {
   }
 }
 
-// ── Concept slides ──
-class _Concept extends StatefulWidget {
-  final VoidCallback onBack;
-  final VoidCallback onDone;
-  const _Concept({required this.onBack, required this.onDone});
-  @override
-  State<_Concept> createState() => _ConceptState();
-}
+/// The four-lens selector: a pill with a sliding inverse chip behind the active
+/// segment. Tapping a segment re-renders the whole ledger for that party.
+class _LensBar extends StatelessWidget {
+  final Role active;
+  final ValueChanged<Role> onChanged;
+  const _LensBar({required this.active, required this.onChanged});
 
-class _ConceptState extends State<_Concept> {
-  int _p = 0;
   @override
   Widget build(BuildContext context) {
     final c = context.sotto;
-    final concept = kConcepts[_p];
-    void next() => _p < kConcepts.length - 1 ? setState(() => _p++) : widget.onDone();
-    void prev() => _p > 0 ? setState(() => _p--) : widget.onBack();
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(26, 0, 26, 26),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    final roles = Role.values;
+    final i = roles.indexOf(active);
+    return Container(
+      height: 50,
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: c.surface2,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: c.hair, width: 0.5),
+      ),
+      child: Stack(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Pressable(
-                onTap: prev,
-                child: Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: SottoIcon('back', size: 24, weight: 2, color: c.text),
-                ),
+          AnimatedAlign(
+            duration: Motion.base,
+            curve: Motion.emphasized,
+            alignment: Alignment((i - 1.5) / 1.5, 0),
+            child: FractionallySizedBox(
+              widthFactor: 1 / roles.length,
+              heightFactor: 1,
+              child: Container(
+                decoration: BoxDecoration(color: c.inv, borderRadius: BorderRadius.circular(12)),
               ),
-              GestureDetector(
-                onTap: widget.onDone,
-                child: Padding(
-                  padding: const EdgeInsets.all(6),
-                  child: Text('Skip', style: TextStyle(color: c.sec, fontSize: 14, fontWeight: FontWeight.w600)),
-                ),
-              ),
-            ],
-          ),
-          Expanded(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 76,
-                  height: 76,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: c.surface,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: c.hair2, width: 1.5),
-                  ),
-                  child: SottoIcon(concept.iconName, size: 34, weight: 1.7, color: c.text),
-                ),
-                const SizedBox(height: 26),
-                Text(concept.title,
-                    style: TextStyle(color: c.text, fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.6, height: 1.1)),
-                const SizedBox(height: 14),
-                Text(concept.body, style: TextStyle(color: c.sec, fontSize: 16, height: 1.5, letterSpacing: -0.1)),
-              ],
             ),
           ),
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Row(
-                children: [
-                  for (var i = 0; i < kConcepts.length; i++)
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 250),
-                      margin: const EdgeInsets.only(right: 7),
-                      width: i == _p ? 22 : 7,
-                      height: 7,
-                      decoration: BoxDecoration(
-                        color: i == _p ? c.text : c.hair2,
-                        borderRadius: BorderRadius.circular(7),
+              for (final r in roles)
+                Expanded(
+                  child: Pressable(
+                    onTap: () => onChanged(r),
+                    child: Center(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SottoIcon(r.iconName, size: 14, weight: 2, color: r == active ? c.invText : c.sec),
+                            const SizedBox(width: 5),
+                            Text(r.label,
+                                style: TextStyle(
+                                    color: r == active ? c.invText : c.sec,
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: -0.2)),
+                          ],
+                        ),
                       ),
                     ),
-                ],
-              ),
-              AppButton(label: _p < kConcepts.length - 1 ? 'Next' : 'Set up', full: false, onTap: next),
+                  ),
+                ),
             ],
           ),
         ],
@@ -200,7 +386,204 @@ class _ConceptState extends State<_Concept> {
   }
 }
 
-// ── Setup wizard ──
+/// The six-row ledger card + a footer total, both re-rendered for the active lens.
+class _LedgerCard extends StatelessWidget {
+  final Role lens;
+  const _LedgerCard({required this.lens});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sotto;
+    final (label, subline, value) = _footerFor(lens);
+    return AppCard(
+      pad: 0,
+      child: Column(
+        children: [
+          for (var i = 0; i < _kBatch.length; i++) ...[
+            _LedgerRow(row: _kBatch[i], lens: lens, isYou: i == _kYou),
+            if (i < _kBatch.length - 1)
+              Divider(height: 0.5, thickness: 0.5, color: c.hair, indent: 14, endIndent: 14),
+          ],
+          Container(
+            padding: const EdgeInsets.fromLTRB(15, 13, 15, 14),
+            decoration: BoxDecoration(border: Border(top: BorderSide(color: c.hair, width: 0.5))),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: AnimatedSwitcher(
+                    duration: Motion.base,
+                    child: Column(
+                      key: ValueKey(label),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(label.toUpperCase(), style: _monoStyle(c.ter, size: 11, ls: 0.5, height: 1.0)),
+                        const SizedBox(height: 4),
+                        Text(subline,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: c.sec, fontSize: 12.5, letterSpacing: -0.1)),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                AnimatedAmount(value: value, builder: (ctx, v) => _Amount(v, size: 20)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One ledger row, rendered for the active lens: full, redacted (recipient),
+/// dimmed (approver, under threshold) or flagged (approver, over threshold).
+class _LedgerRow extends StatelessWidget {
+  final _BatchRow row;
+  final Role lens;
+  final bool isYou;
+  const _LedgerRow({required this.row, required this.lens, required this.isYou});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sotto;
+    final over = row.amount > _kThreshold;
+    final redacted = lens == Role.recipient && !isYou;
+    final dimmed = lens == Role.approver && !over;
+    final lifted = lens == Role.recipient && isYou;
+    final flagged = lens == Role.approver && over;
+
+    final money = redacted ? const _RedactionPill() : _Amount(row.amount, size: 15.5, dim: dimmed);
+
+    final Widget subtitle = flagged
+        ? Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SottoIcon('shield', size: 13, weight: 2, color: c.text),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text('Over threshold — second signer required',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: c.sec, fontSize: 12.5, fontWeight: FontWeight.w600)),
+              ),
+            ],
+          )
+        : Text(redacted ? 'Confidential' : row.role,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: dimmed ? c.ter : c.sec, fontSize: 13));
+
+    return AnimatedOpacity(
+      duration: Motion.base,
+      opacity: dimmed ? 0.5 : 1.0,
+      child: AnimatedContainer(
+        duration: Motion.base,
+        curve: Motion.emphasized,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        color: lifted ? c.surface2 : Colors.transparent,
+        child: Row(
+          children: [
+            Avatar(name: redacted ? '·' : row.name, size: 38, you: lifted),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(redacted ? '—' : row.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                          color: redacted || dimmed ? c.ter : c.text,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.2)),
+                  const SizedBox(height: 2),
+                  subtitle,
+                ],
+              ),
+            ),
+            const SizedBox(width: 10),
+            AnimatedSwitcher(
+              duration: Motion.base,
+              switchInCurve: Motion.emphasized,
+              child: KeyedSubtree(
+                key: ValueKey(redacted ? 'r' : dimmed ? 'd' : 'f'),
+                child: money,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The "this line is private to its recipient" pill — the one element that could
+/// only belong to Sotto.
+class _RedactionPill extends StatelessWidget {
+  const _RedactionPill();
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sotto;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: c.surface2,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: c.hair, width: 0.5),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SottoIcon('lock', size: 12, weight: 2, color: c.ter),
+          const SizedBox(width: 6),
+          Text('••••• · CONFIDENTIAL', style: _monoStyle(c.ter, size: 10.5, ls: 0.3, height: 1.0)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Four dots that fill as each lens is first viewed, with a nudge that fades once
+/// the user has seen all four — gating the CTA's full emphasis.
+class _LensProgress extends StatelessWidget {
+  final Set<Role> seen;
+  const _LensProgress({required this.seen});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sotto;
+    final all = seen.length == Role.values.length;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (final r in Role.values)
+          AnimatedContainer(
+            duration: Motion.base,
+            curve: Motion.emphasized,
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: seen.contains(r) ? c.text : c.hair2),
+          ),
+        const SizedBox(width: 10),
+        AnimatedOpacity(
+          duration: Motion.base,
+          opacity: all ? 0 : 1,
+          child: Text('See it from all four',
+              style: TextStyle(color: c.ter, fontSize: 12.5, fontWeight: FontWeight.w600)),
+        ),
+      ],
+    );
+  }
+}
+
+// ── Setup wizard (reached via "Tune the numbers first") ──
 class _Setup extends StatefulWidget {
   final SetupDraft draft;
   final ValueChanged<SetupDraft> onChange;

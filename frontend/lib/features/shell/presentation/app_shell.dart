@@ -3,8 +3,10 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/icons/sotto_icon.dart';
+import '../../../core/motion/motion.dart';
 import '../../../core/theme/sotto_colors.dart';
 import '../../../core/widgets/wallet.dart';
+import '../../auth/presentation/sign_in_screen.dart';
 import '../../onboarding/presentation/onboarding_screen.dart';
 import '../../payouts/presentation/account/account_screen.dart';
 import '../../payouts/presentation/approver/approver_home.dart';
@@ -15,6 +17,7 @@ import '../../payouts/presentation/payer/payer_home.dart';
 import '../../payouts/presentation/payer/review_screen.dart';
 import '../../payouts/presentation/payer/settling_screen.dart';
 import '../../payouts/presentation/recipient/recipient_home.dart';
+import '../../payouts/presentation/widgets/ledger_sheet.dart';
 import 'state/shell_providers.dart';
 import 'widgets/role_switch_sheet.dart';
 
@@ -29,9 +32,11 @@ class AppShell extends ConsumerWidget {
     final c = context.sotto;
     final shell = ref.watch(shellControllerProvider);
 
-    final Widget content = shell.phase == AppPhase.onboarding
-        ? const OnboardingScreen()
-        : _AppBody(shell: shell);
+    final Widget content = switch (shell.phase) {
+      AppPhase.signIn => const SignInScreen(),
+      AppPhase.onboarding => const OnboardingScreen(),
+      AppPhase.app => _AppBody(shell: shell),
+    };
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: c.dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark,
@@ -75,13 +80,14 @@ class _AppBody extends ConsumerWidget {
       children: [
         Positioned.fill(
           child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 220),
-            switchInCurve: Curves.easeOut,
+            duration: const Duration(milliseconds: 280),
+            switchInCurve: Motion.emphasized,
+            switchOutCurve: Curves.easeIn,
             transitionBuilder: (child, anim) => FadeTransition(
               opacity: anim,
               child: SlideTransition(
                 position: Tween(
-                  begin: Offset(shell.dir == NavDir.back ? -0.02 : 0.02, 0),
+                  begin: Offset(shell.dir == NavDir.back ? -0.025 : 0.025, 0),
                   end: Offset.zero,
                 ).animate(anim),
                 child: child,
@@ -115,6 +121,7 @@ class _AppBody extends ConsumerWidget {
             child: _Toast(message: shell.toast!),
           ),
         if (shell.rolesOpen) const RoleSwitchSheet(),
+        if (shell.ledgerOpen) const LedgerSheet(),
       ],
     );
   }

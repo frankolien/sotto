@@ -1,6 +1,8 @@
 // Maps the backend JSON (which mirrors the LedgerState DTOs) to/from pure domain
 // entities. Keeping this in the data layer leaves the domain free of JSON.
 
+import '../domain/entities/activity.dart';
+import '../domain/entities/ledger_info.dart';
 import '../domain/entities/ledger_state.dart';
 import '../domain/entities/rail_config.dart';
 
@@ -10,7 +12,20 @@ LedgerState ledgerStateFromJson(Map<String, dynamic> j) => LedgerState(
       recipientName: j['recipientName'] as String? ?? '',
       mandate: _mandateFromJson(j['mandate'] as Map<String, dynamic>),
       batch: _batchFromJson(j['batch'] as Map<String, dynamic>),
+      activity: _activityFromJson(j['activity'] as List? ?? const []),
     );
+
+List<ActivityEntry> _activityFromJson(List raw) => raw.map((e) {
+      final m = e as Map<String, dynamic>;
+      return ActivityEntry(
+        name: m['name'] as String,
+        sub: m['sub'] as String,
+        amount: (m['amount'] as num).toDouble(),
+        income: m['dir'] == 'in',
+        at: DateTime.tryParse(m['at'] as String? ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0),
+        cid: m['cid'] as String? ?? '',
+      );
+    }).toList();
 
 Mandate _mandateFromJson(Map<String, dynamic> j) => Mandate(
       name: j['name'] as String,
@@ -41,6 +56,19 @@ PayoutLine _lineFromJson(Map<String, dynamic> j) => PayoutLine(
       status: LineStatus.values.byName(j['status'] as String),
       you: j['you'] as bool? ?? false,
       big: j['big'] as bool? ?? false,
+    );
+
+LedgerInfo ledgerInfoFromJson(Map<String, dynamic> j) => LedgerInfo(
+      party: j['party'] as String,
+      offset: (j['offset'] as num).toInt(),
+      contracts: (j['contracts'] as List)
+          .map((e) => ContractRef(
+                template: e['template'] as String,
+                cid: e['cid'] as String,
+                amount: (e['amount'] as num?)?.toDouble(),
+                label: e['label'] as String,
+              ))
+          .toList(),
     );
 
 Map<String, dynamic> railConfigToJson(RailConfig c) => {

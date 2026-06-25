@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../icons/sotto_icon.dart';
+import '../motion/motion.dart';
 import '../theme/sotto_colors.dart';
 import '../utils/format.dart';
 import 'primitives.dart';
@@ -91,9 +92,6 @@ class BigBalance extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final c = context.sotto;
-    final parts = fmt(value).split('.');
-    final whole = parts[0];
-    final cents = parts.length > 1 ? parts[1] : '00';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -111,28 +109,27 @@ class BigBalance extends StatelessWidget {
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 alignment: Alignment.centerLeft,
-                child: Text.rich(
-                  TextSpan(children: [
-                    TextSpan(
-                      text: whole,
-                      style: TextStyle(
-                          color: c.text,
-                          fontSize: 44 * c.scale,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -1.6,
-                          height: 1),
-                    ),
-                    TextSpan(
-                      text: '.$cents',
-                      style: TextStyle(
-                          color: c.ter,
-                          fontSize: 44 * c.scale,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: -1.6,
-                          height: 1),
-                    ),
-                  ]),
-                  maxLines: 1,
+                // Count up/down when the balance moves — the hero beat of a settle.
+                child: AnimatedAmount(
+                  value: value,
+                  builder: (ctx, v) {
+                    final parts = fmt(v).split('.');
+                    final whole = parts[0];
+                    final cents = parts.length > 1 ? parts[1] : '00';
+                    final style = TextStyle(
+                        fontSize: 44 * c.scale,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: -1.6,
+                        height: 1,
+                        fontFeatures: const [FontFeature.tabularFigures()]);
+                    return Text.rich(
+                      TextSpan(children: [
+                        TextSpan(text: whole, style: style.copyWith(color: c.text)),
+                        TextSpan(text: '.$cents', style: style.copyWith(color: c.ter)),
+                      ]),
+                      maxLines: 1,
+                    );
+                  },
                 ),
               ),
             ),
@@ -315,33 +312,63 @@ class SottoTabBar extends StatelessWidget {
         color: c.bg,
         border: Border(top: BorderSide(color: c.hair, width: 0.5)),
       ),
-      padding: const EdgeInsets.only(top: 8, bottom: 22),
+      padding: const EdgeInsets.only(top: 9, bottom: 20),
       child: Row(
         children: [
           for (final it in items)
             Expanded(
               child: Pressable(
                 onTap: () => onTap(it.id),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    SottoIcon(it.icon,
-                        size: 24,
-                        weight: it.id == active ? 2.1 : 1.8,
-                        color: it.id == active ? c.text : c.ter),
-                    const SizedBox(height: 4),
-                    Text(it.label,
-                        style: TextStyle(
-                            color: it.id == active ? c.text : c.ter,
-                            fontSize: 10.5,
-                            fontWeight: it.id == active
-                                ? FontWeight.w600
-                                : FontWeight.w500,
-                            letterSpacing: 0.1)),
-                  ],
-                ),
+                child: _Tab(item: it, active: it.id == active),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Tab extends StatelessWidget {
+  final TabItem item;
+  final bool active;
+  const _Tab({required this.item, required this.active});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.sotto;
+    final color = active ? c.text : c.ter;
+    return AnimatedScale(
+      scale: active ? 1 : 0.9,
+      duration: Motion.base,
+      curve: Motion.emphasized,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TweenAnimationBuilder<Color?>(
+            tween: ColorTween(end: color),
+            duration: Motion.base,
+            builder: (_, col, _) => SottoIcon(item.icon,
+                size: 24, weight: active ? 2.1 : 1.8, color: col ?? color),
+          ),
+          const SizedBox(height: 4),
+          Text(item.label,
+              style: TextStyle(
+                  color: color,
+                  fontSize: 10.5,
+                  fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                  letterSpacing: 0.1)),
+          const SizedBox(height: 5),
+          // Active indicator that springs in under the current tab.
+          AnimatedScale(
+            scale: active ? 1 : 0,
+            duration: Motion.base,
+            curve: Motion.emphasized,
+            child: Container(
+              width: 4,
+              height: 4,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: c.text),
+            ),
+          ),
         ],
       ),
     );

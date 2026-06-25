@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
+    "start:rs256": "AUTH_MODE=rs256 tsx src/server.ts",
+    "prove:rs256": "tsx scripts/prove-rs256.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -66,6 +66,31 @@ export interface BatchDto {
   lines: LineDto[];
 }
 
+/** A real contract on the ledger, surfaced so amounts are provably not made up. */
+export interface ContractRefDto {
+  template: string; // Holding | PayoutMandate | LargePaymentProposal | DisbursementReceipt
+  cid: string; // the on-ledger contract id
+  amount: number | null;
+  label: string;
+}
+
+/** The raw ledger truth for the signed-in party: identity, position, contracts. */
+export interface LedgerInfoDto {
+  party: string; // full Canton party id of the session
+  offset: number; // current ledger offset (live position)
+  contracts: ContractRefDto[];
+}
+
+/** One real on-ledger activity row (a settled payment), with its real timestamp. */
+export interface ActivityDto {
+  name: string;
+  sub: string;
+  amount: number;
+  dir: 'in' | 'out';
+  at: string; // ISO timestamp from the ledger
+  cid: string; // the receipt contract id
+}
+
 export interface LedgerStateDto {
   treasury: number;
   org: string;
@@ -74,4 +99,6 @@ export interface LedgerStateDto {
   recipientName: string;
   mandate: MandateDto;
   batch: BatchDto;
+  /** Real activity derived from on-ledger DisbursementReceipts (newest first). */
+  activity: ActivityDto[];
 }

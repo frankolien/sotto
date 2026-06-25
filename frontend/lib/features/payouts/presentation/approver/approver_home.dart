@@ -10,6 +10,7 @@ import '../../../../core/widgets/wallet.dart';
 import '../../../shell/presentation/state/shell_providers.dart';
 import '../../domain/entities/ledger_state.dart';
 import '../state/ledger_providers.dart';
+import '../widgets/sync_badge.dart';
 
 class ApproverHome extends ConsumerWidget {
   const ApproverHome({super.key});
@@ -36,7 +37,7 @@ class ApproverHome extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          AccountHeader(name: m.approver, sub: 'Approver · tap to switch view', onOpen: shell.openRoles),
+          AccountHeader(name: m.approver, sub: 'Approver · tap to switch view', onOpen: shell.openRoles, right: const SyncBadge()),
           HomeBody(children: [
             Text('Approvals',
                 style: TextStyle(color: c.text, fontSize: 17, fontWeight: FontWeight.w700, letterSpacing: -0.3)),

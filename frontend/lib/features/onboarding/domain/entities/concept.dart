@@ -15,7 +15,7 @@ const kConcepts = <Concept>[
   ),
   Concept(
     iconName: 'eye',
-    title: 'Auditable by permission',
+    title: 'Optional audit trail',
     body: 'A named auditor gets read-only visibility into the entire batch. '
         'Visibility is granted, never assumed.',
   ),

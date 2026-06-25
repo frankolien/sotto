@@ -1,0 +1,118 @@
+@import "tailwindcss";
+
+/* ── Sotto web design system ────────────────────────────────────────────────
+   Monochrome base + one electric indigo accent. Depth from 1px hairlines, never
+   heavy shadows. IBM Plex Mono carries the confidential-ledger signature.
+   Themeable: dark by default, light via [data-theme="light"]. */
+:root {
+  --page: #08090a;
+  --surface: #0e0f12;
+  --surface-2: #16181c;
+  --raise: #1d2025;
+  --ink: #f4f5f6;
+  --ink-2: #9ca1a9;
+  --ink-3: #61656d;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-2: rgba(255, 255, 255, 0.14);
+  --accent: #6e5bf6;
+  --accent-2: #9b8cff;
+  --good: #46cc8d;
+  --warn: #e0a24a;
+  /* decorative, theme-tuned */
+  --glow: rgba(110, 91, 246, 0.18);
+  --glow-strong: rgba(110, 91, 246, 0.28);
+  --grid: rgba(255, 255, 255, 0.035);
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --page: #fafaf8;
+  --surface: #ffffff;
+  --surface-2: #f1f1ee;
+  --raise: #e8e8e3;
+  --ink: #0a0a0b;
+  --ink-2: rgba(40, 40, 46, 0.64);
+  --ink-3: rgba(40, 40, 46, 0.42);
+  --line: rgba(0, 0, 0, 0.08);
+  --line-2: rgba(0, 0, 0, 0.13);
+  --accent: #5a47e6;
+  --accent-2: #6e5bf6;
+  --good: #1f9d62;
+  --warn: #b5742a;
+  --glow: rgba(110, 91, 246, 0.1);
+  --glow-strong: rgba(110, 91, 246, 0.14);
+  --grid: rgba(0, 0, 0, 0.04);
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-raise: var(--raise);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-ink-3: var(--ink-3);
+  --color-line: var(--line);
+  --color-line-2: var(--line-2);
+  --color-accent: var(--accent);
+  --color-accent-2: var(--accent-2);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, "SF Mono", monospace;
+
+  --ease-out-soft: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--page);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  transition: background 0.3s ease, color 0.3s ease;
+}
+
+::selection {
+  background: rgba(110, 91, 246, 0.34);
+  color: #fff;
+}
+
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+.mono-label {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+@keyframes reveal-up {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fade-key {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-key {
+  animation: fade-key 0.3s var(--ease-out-soft) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

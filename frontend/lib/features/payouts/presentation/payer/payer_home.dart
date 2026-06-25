@@ -10,6 +10,7 @@ import '../../../shell/presentation/state/shell_providers.dart';
 import '../../domain/entities/activity.dart';
 import '../../domain/entities/ledger_state.dart';
 import '../state/ledger_providers.dart';
+import '../widgets/sync_badge.dart';
 
 class PayerHome extends ConsumerWidget {
   const PayerHome({super.key});
@@ -21,23 +22,20 @@ class PayerHome extends ConsumerWidget {
     final b = s.batch;
     final isDone = b.status == BatchStatus.settled;
 
-    final todayRows = isDone
-        ? b.lines
-            .map((l) => ActivityItem(
-                  name: l.name,
-                  sub: l.status == LineStatus.pending
-                      ? 'Held · awaiting approval'
-                      : l.status == LineStatus.rejected
-                          ? 'Rejected'
-                          : 'Contributor payout',
-                  amount: l.amount,
-                ))
-            .toList()
-        : <ActivityItem>[];
-    final groups = [
-      if (todayRows.isNotEmpty) ActivityGroup(day: 'Today', rows: todayRows),
-      ...LedgerState.payerHistory,
-    ];
+    // Real activity from the ledger (settled receipts with real timestamps), plus
+    // any lines still pending/rejected in the current batch.
+    final pendingEntries = b.lines
+        .where((l) => l.status == LineStatus.pending || l.status == LineStatus.rejected)
+        .map((l) => ActivityEntry(
+              name: l.name,
+              sub: l.status == LineStatus.pending ? 'Held · awaiting approval' : 'Rejected',
+              amount: l.amount,
+              income: false,
+              at: DateTime.now(),
+              cid: '',
+            ))
+        .toList();
+    final groups = groupActivity([...pendingEntries, ...s.activity]);
 
     return SingleChildScrollView(
       child: Column(
@@ -47,6 +45,7 @@ class PayerHome extends ConsumerWidget {
             name: s.org,
             sub: 'Payer · tap to switch view',
             onOpen: shell.openRoles,
+            right: const SyncBadge(),
           ),
           HomeBody(children: [
             BigBalance(label: 'Total balance', value: s.treasury),
@@ -150,6 +149,12 @@ class _Activity extends StatelessWidget {
               ),
           ],
         ),
+        if (groups.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 14),
+            child: Text('No activity yet — run a batch and it lands here, live from the ledger.',
+                style: TextStyle(color: c.sec, fontSize: 13.5, height: 1.4)),
+          ),
         for (final g in groups)
           Padding(
             padding: const EdgeInsets.only(top: 8),

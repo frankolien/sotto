@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/icons/sotto_icon.dart';
@@ -32,6 +33,7 @@ class ReviewScreen extends ConsumerWidget {
         try {
           await ledger.settle();
         } finally {
+          HapticFeedback.heavyImpact(); // the batch lands
           shell.completeSettle(); // always leave the settling screen
         }
       });

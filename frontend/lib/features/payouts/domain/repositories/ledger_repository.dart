@@ -1,3 +1,4 @@
+import '../entities/ledger_info.dart';
 import '../entities/ledger_state.dart';
 import '../entities/rail_config.dart';
 import '../entities/role.dart';
@@ -7,6 +8,7 @@ import '../entities/role.dart';
 /// so the privacy is Canton's, enforced on the server, not trusted on the client.
 abstract interface class LedgerRepository {
   Future<LedgerState> stateFor(Role role);
+  Future<LedgerInfo> ledgerInfo(Role role);
   Future<void> configure(RailConfig config);
   Future<void> settle();
   Future<void> approve(String lineId);

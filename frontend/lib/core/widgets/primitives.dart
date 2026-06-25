@@ -1,17 +1,28 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../icons/sotto_icon.dart';
 import '../theme/sotto_colors.dart';
 import '../utils/format.dart';
 
-/// Subtle press-scale, matching the prototype's tap feedback.
+/// Press-scale with a crisp selection haptic — the tactile base every tappable
+/// surface is built on.
 class Pressable extends StatefulWidget {
   final Widget child;
   final VoidCallback? onTap;
   final BorderRadius? radius;
-  const Pressable({super.key, required this.child, this.onTap, this.radius});
+  final bool haptic;
+  final double scale;
+  const Pressable({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.radius,
+    this.haptic = true,
+    this.scale = 0.97,
+  });
 
   @override
   State<Pressable> createState() => _PressableState();
@@ -19,16 +30,28 @@ class Pressable extends StatefulWidget {
 
 class _PressableState extends State<Pressable> {
   bool _down = false;
+  void _set(bool v) {
+    if (mounted) setState(() => _down = v);
+  }
+
+  void _handleTap() {
+    if (widget.haptic) HapticFeedback.selectionClick();
+    widget.onTap!();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final enabled = widget.onTap != null;
     return GestureDetector(
-      onTapDown: widget.onTap == null ? null : (_) => setState(() => _down = true),
-      onTapUp: widget.onTap == null ? null : (_) => setState(() => _down = false),
-      onTapCancel: widget.onTap == null ? null : () => setState(() => _down = false),
-      onTap: widget.onTap,
+      behavior: HitTestBehavior.opaque,
+      onTapDown: enabled ? (_) => _set(true) : null,
+      onTapUp: enabled ? (_) => _set(false) : null,
+      onTapCancel: enabled ? () => _set(false) : null,
+      onTap: enabled ? _handleTap : null,
       child: AnimatedScale(
-        scale: _down ? 0.975 : 1,
-        duration: const Duration(milliseconds: 90),
+        scale: _down ? widget.scale : 1,
+        duration: const Duration(milliseconds: 110),
+        curve: Curves.easeOut,
         child: widget.child,
       ),
     );
@@ -317,6 +340,7 @@ class AppButton extends StatelessWidget {
       BtnVariant.secondary => (c.surface2, c.text, c.hair),
       BtnVariant.ghost => (Colors.transparent, c.text, c.hair2),
     };
+    final lift = variant == BtnVariant.primary && !disabled && !c.dark;
     final body = Container(
       height: large ? 54 : 44,
       width: full ? double.infinity : null,
@@ -328,6 +352,11 @@ class AppButton extends StatelessWidget {
         border: Border.all(
             color: bd == Colors.transparent ? Colors.transparent : bd,
             width: variant == BtnVariant.ghost ? 1 : 0.5),
+        // A whisper of depth under the primary CTA — just enough to lift it off
+        // the page without breaking the flat monochrome language.
+        boxShadow: lift
+            ? const [BoxShadow(color: Color(0x1F000000), blurRadius: 16, offset: Offset(0, 6))]
+            : null,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

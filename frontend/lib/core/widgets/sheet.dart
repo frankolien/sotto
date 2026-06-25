@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../theme/sotto_colors.dart';
 
@@ -19,6 +20,12 @@ class _SottoSheetState extends State<SottoSheet>
     vsync: this,
     duration: const Duration(milliseconds: 280),
   )..forward();
+
+  @override
+  void initState() {
+    super.initState();
+    HapticFeedback.lightImpact(); // the sheet announces itself
+  }
 
   @override
   void dispose() {

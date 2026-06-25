@@ -1,9 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/persistence/session_store.dart';
 import '../../../payouts/domain/entities/role.dart';
 
-/// First-run vs the running app.
-enum AppPhase { onboarding, app }
+/// Onboarding (set up the rail) → sign in as an identity → the running app.
+enum AppPhase { onboarding, signIn, app }
 
 /// Every routable screen. Role homes + the payer sub-flow + Account.
 enum AppScreen {
@@ -34,6 +35,7 @@ class ShellState {
   final AppScreen screen;
   final List<AppScreen> stack;
   final bool rolesOpen;
+  final bool ledgerOpen;
   final String? toast;
   final NavDir dir;
 
@@ -43,6 +45,7 @@ class ShellState {
     this.screen = AppScreen.payerHome,
     this.stack = const [],
     this.rolesOpen = false,
+    this.ledgerOpen = false,
     this.toast,
     this.dir = NavDir.forward,
   });
@@ -57,6 +60,7 @@ class ShellState {
     AppScreen? screen,
     List<AppScreen>? stack,
     bool? rolesOpen,
+    bool? ledgerOpen,
     Object? toast = _sentinel,
     NavDir? dir,
   }) =>
@@ -66,6 +70,7 @@ class ShellState {
         screen: screen ?? this.screen,
         stack: stack ?? this.stack,
         rolesOpen: rolesOpen ?? this.rolesOpen,
+        ledgerOpen: ledgerOpen ?? this.ledgerOpen,
         toast: identical(toast, _sentinel) ? this.toast : toast as String?,
         dir: dir ?? this.dir,
       );
@@ -77,13 +82,22 @@ class ShellState {
 /// the ledger from [ledgerControllerProvider] and the lens from here.
 class ShellController extends Notifier<ShellState> {
   int _toastToken = 0;
+  late final SessionStore _store;
 
   @override
   ShellState build() {
-    // Dev entry point: `--dart-define=start=app` boots straight into the wallet,
-    // skipping onboarding. Default (no define) shows onboarding.
+    _store = ref.read(sessionStoreProvider);
+    // Dev entry point: `--dart-define=start=app|signin` boots straight in.
     const start = String.fromEnvironment('start');
     if (start == 'app') return const ShellState(phase: AppPhase.app);
+    if (start == 'signin') return const ShellState(phase: AppPhase.signIn);
+    // Otherwise reopen where you left off (persisted across restarts).
+    final roleName = _store.signedInRole;
+    if (roleName != null) {
+      final role = Role.values.asNameMap()[roleName] ?? Role.payer;
+      return ShellState(phase: AppPhase.app, role: role, screen: homeFor(role));
+    }
+    if (_store.onboarded) return const ShellState(phase: AppPhase.signIn);
     return const ShellState();
   }
 
@@ -117,15 +131,30 @@ class ShellController extends Notifier<ShellState> {
   void openRoles() => state = state.copyWith(rolesOpen: true);
   void closeRoles() => state = state.copyWith(rolesOpen: false);
 
-  void enterApp() => state = state.copyWith(
-        phase: AppPhase.app,
-        role: Role.payer,
-        screen: AppScreen.payerHome,
-        stack: const [],
-        dir: NavDir.forward,
-      );
+  void openLedger() => state = state.copyWith(ledgerOpen: true);
+  void closeLedger() => state = state.copyWith(ledgerOpen: false);
 
-  void toOnboarding() => state = const ShellState(phase: AppPhase.onboarding);
+  /// Onboarding is done (rail set up, or skipped) → the sign-in screen. Also the
+  /// sign-out destination: the rail's already set up, you just pick who you are.
+  void toSignIn() {
+    _store.markOnboarded();
+    _store.signOut(); // clear any persisted identity
+    state = const ShellState(phase: AppPhase.signIn);
+  }
+
+  /// Sign in as an identity → that party's wallet. Persisted, so a restart
+  /// reopens straight into this session. Each session is real — the backend
+  /// scopes every read and write to whoever is signed in.
+  void signInAs(Role r) {
+    _store.signIn(r.name);
+    state = ShellState(phase: AppPhase.app, role: r, screen: homeFor(r));
+  }
+
+  /// Full restart (Reset demo): back to the very beginning — onboarding.
+  void restart() {
+    _store.reset();
+    state = const ShellState();
+  }
 
   /// Used after the settling animation completes.
   void completeSettle() => state = state.copyWith(

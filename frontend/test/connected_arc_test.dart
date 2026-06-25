@@ -31,12 +31,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // Welcome
+    // Onboarding first → the interactive Batch hero; step straight into the rail
     expect(find.text('Sotto'), findsOneWidget);
-    expect(find.text('Set up your rail'), findsOneWidget);
+    expect(find.text('Step into the rail'), findsOneWidget);
+    await tester.tap(find.text('Step into the rail'));
+    await tester.pumpAndSettle();
 
-    // Skip straight to the demo → payer wallet
-    await tester.tap(find.text('Skip to the demo'));
+    // Then the sign-in screen → sign in as the payer → payer wallet
+    expect(find.text('Sign in'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('signin-payer')));
     await tester.pumpAndSettle();
     expect(find.text('Total balance'), findsOneWidget);
     expect(find.text('Lumen Studio'), findsOneWidget);
