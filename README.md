@@ -93,20 +93,6 @@ invisible — the privacy is the only thing you notice.
 - **Docker** — for a local Canton network when the demo moves on-ledger.
 - **Flutter** — the long-term mobile surface.
 
-## Status
-
-- [x] Repo scaffolded; model in place; docs captured
-- [x] Daml SDK (`dpm`) installed; model **compiles on 3.4.11** (cn-quickstart's pin) and 3.5.1
-- [x] `demo` script **green with per-party privacy assertions** — the asymmetry is machine-checked, not just narrated
-- [x] Templates split from scripts (lean upload DAR), mirroring cn-quickstart
-- [x] Thin backend over the JSON Ledger API — RS256/JWKS auth, JIT wallet provisioning
-- [x] **Web console + landing** — four-lens dashboards, atomic-payout demo, light/dark
-- [x] Flutter client — four-lens story on mobile
-- [x] Submission kit — briefing PDF, demo script, pitch deck outline, reference screenshots ([docs/](docs/), [web/DEMO.md](web/DEMO.md))
-- [ ] Local Canton network (cn-quickstart LocalNet) + Sotto DAR deployed end-to-end
-- [ ] Deployed live URL + recorded 3-minute demo video
-
-## Quick start — web console (the demo)
 
 Requires Node 20+.
 
