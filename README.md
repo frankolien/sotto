@@ -21,8 +21,11 @@ This repository is the **hackathon MVP** for *Build on Canton* (ENCODE Club, kic
    Open **http://localhost:3000**, click **See it live**, then switch the identity
    (Payer / Recipient / Approver / Auditor) to watch the *same* batch project a
    different view to each party.
-2. **Watch the 3-minute story:** the shot-by-shot script is in [web/DEMO.md](web/DEMO.md).
-   The pitch outline is in [docs/DECK.md](docs/DECK.md).
+2. **Get the story fast:** the one-read briefing
+   [docs/sotto-canton-briefing.pdf](docs/sotto-canton-briefing.pdf) explains what Canton
+   is, what Sotto does, and answers the questions a judge is likely to ask. The on-screen
+   demo script is [web/DEMO.md](web/DEMO.md), the pitch outline [docs/DECK.md](docs/DECK.md),
+   and reference screenshots are in [docs/shots/](docs/shots/).
 3. **See that it's real on Canton:** the privacy and settlement the console shows are
    proven by the Daml model and the backend below — run `dpm test` (last section) to
    watch each party's visibility get *asserted*, not just narrated.
@@ -75,6 +78,14 @@ participant stays lean. The scripts (and the privacy proofs) live in `sotto-test
 - **`frontend/`** — the Flutter client, the long-term product surface. Same four-lens
   story, mobile-native.
 
+## Signing in — no wallets to connect
+
+Canton isn't MetaMask. There's no browser extension and no seed phrase: a user signs in
+with email / SSO (a JWT validated against JWKS), and the backend provisions their Canton
+party **just-in-time**. Recipients custody nothing and never manage a key; the treasury
+can self-custody via Canton's external signing when an org wants it. The crypto is
+invisible — the privacy is the only thing you notice.
+
 ## Toolchain
 
 - **Daml SDK via `dpm`** (Digital Asset Package Manager) — the model targets Daml 3.x (Canton 3.x), matching `cn-quickstart`.
@@ -91,7 +102,7 @@ participant stays lean. The scripts (and the privacy proofs) live in `sotto-test
 - [x] Thin backend over the JSON Ledger API — RS256/JWKS auth, JIT wallet provisioning
 - [x] **Web console + landing** — four-lens dashboards, atomic-payout demo, light/dark
 - [x] Flutter client — four-lens story on mobile
-- [x] Demo video script + pitch deck outline ([web/DEMO.md](web/DEMO.md), [docs/DECK.md](docs/DECK.md))
+- [x] Submission kit — briefing PDF, demo script, pitch deck outline, reference screenshots ([docs/](docs/), [web/DEMO.md](web/DEMO.md))
 - [ ] Local Canton network (cn-quickstart LocalNet) + Sotto DAR deployed end-to-end
 - [ ] Deployed live URL + recorded 3-minute demo video
 
