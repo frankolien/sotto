@@ -56,9 +56,8 @@ function Hero() {
 
         <Reveal delay={0.12}>
           <p className="mx-auto mt-6 max-w-xl text-[16.5px] leading-relaxed text-ink-2">
-            Sotto pays your whole roster in a single confidential transaction on Canton. Each
-            party sees only what they&rsquo;re entitled to — privacy enforced by the ledger, not
-            the app.
+            Pay every contributor in one confidential transaction on Canton. Each keeps their own
+            wallet and sees only their own line — privacy enforced by the ledger, not the app.
           </p>
         </Reveal>
 
@@ -108,17 +107,17 @@ function How() {
     {
       icon: "layers",
       title: "Set the rail",
-      body: "Fund a treasury and encode the mandate — per-cycle cap, approval threshold, named approver and auditor. The rules live on the ledger, not in a policy doc.",
+      body: "Fund a treasury and encode the mandate — per-cycle cap, approval threshold, the signer and auditor who can see it. The rules live on the ledger, not in a Notion doc.",
     },
     {
       icon: "bolt",
       title: "Pay the batch at once",
-      body: "One confidential transaction disburses the whole roster. Under-threshold lines settle atomically; anything larger holds for a second signer — all of it, or none.",
+      body: "One confidential transaction pays the whole guild. Small lines settle atomically; a milestone grant holds for a second signer — all of it, or none.",
     },
     {
-      icon: "eye",
-      title: "Everyone sees their slice",
-      body: "A recipient sees only their own line. A named auditor sees every receipt. A competitor sees nothing at all. The asymmetry is the product.",
+      icon: "shield",
+      title: "Everyone keeps their keys",
+      body: "Each contributor is paid to their own wallet — Sotto never holds their keys. They see their line; another DAO sees nothing at all. The asymmetry is the product.",
     },
   ];
   return (
@@ -127,8 +126,8 @@ function How() {
         <Reveal>
           <SectionHeading
             eyebrow="How it works"
-            title="Payroll that doesn't leak"
-            sub="Three steps from a funded treasury to six people paid — each seeing only what the rail allows."
+            title="Treasury payouts that don't leak"
+            sub="Three steps from a funded treasury to your whole guild paid — each contributor seeing only their own line, and keeping their own keys."
           />
         </Reveal>
         <div className="mt-14 grid gap-4 md:grid-cols-3">
@@ -152,10 +151,10 @@ function How() {
 
 function Lenses() {
   const lenses = [
-    { icon: "building", name: "Payer", who: "Lumen Studio", sees: "Runs the mandate and the batch. Sees every name, role and amount before it leaves." },
-    { icon: "arrow-down", name: "Recipient", who: "Amara Okafor", sees: "Sees their own line — and nothing else. The other five payments simply aren't there." },
-    { icon: "eye", name: "Auditor", who: "Hale & Co.", sees: "Read-only visibility into every receipt in the batch. Granted on purpose, never assumed." },
-    { icon: "shield", name: "Approver", who: "Priya Raman", sees: "Sees only what crosses the threshold. The 32,000 needs a second signature; the rest settle untouched." },
+    { icon: "building", name: "Treasury", who: "Nova DAO", sees: "Runs the mandate and the batch. Sees every contributor, role and amount before it leaves the treasury." },
+    { icon: "arrow-down", name: "Contributor", who: "amara.eth", sees: "Sees their own line — paid to their own wallet — and nothing else. The other five payments simply aren't there." },
+    { icon: "eye", name: "Auditor", who: "Sable Audit", sees: "Read-only visibility into every receipt in the batch. Granted on purpose, never assumed." },
+    { icon: "shield", name: "Signer", who: "jules.eth", sees: "Second signer on the treasury. Sees only what crosses the threshold — the 32,000 milestone needs their key; the rest settle untouched." },
   ];
   return (
     <section id="lenses" className="scroll-mt-16 border-t border-line py-24">
@@ -194,8 +193,8 @@ function Canton() {
   // Real evidence from the running rail — each line actually happened on Canton.
   const proof: { op: string; detail: string; tag: string; icon: string; tone: "good" | "accent" }[] = [
     { op: "settle", detail: "treasury 312,480.00 → 291,930.00", tag: "atomic", icon: "check", tone: "good" },
-    { op: "receipt", detail: "amara okafor · +4,200.00", tag: "on-chain", icon: "check", tone: "good" },
-    { op: "deny", detail: "recipient → another’s line", tag: "403 refused", icon: "lock", tone: "accent" },
+    { op: "receipt", detail: "amara.eth · +4,200.00", tag: "on-chain", icon: "check", tone: "good" },
+    { op: "deny", detail: "contributor → another’s line", tag: "403 refused", icon: "lock", tone: "accent" },
     { op: "auth", detail: "per-party token", tag: "RS256 · JWKS", icon: "shield", tone: "good" },
   ];
   const tone = {
@@ -213,7 +212,7 @@ function Canton() {
             </h2>
             <p className="mt-4 max-w-md text-[15.5px] leading-relaxed text-ink-2">
               Every payment is a real contract on a Canton participant node. Privacy isn&rsquo;t a UI
-              trick — a recipient&rsquo;s token is <span className="text-ink">refused at the ledger</span> when it
+              trick — a contributor&rsquo;s token is <span className="text-ink">refused at the ledger</span> when it
               reaches for anyone else&rsquo;s line. The numbers below are on-chain, not made up.
             </p>
             <div className="mt-7 flex flex-wrap gap-2">
@@ -249,7 +248,7 @@ function Canton() {
             </div>
             <div className="border-t border-line px-4 py-3">
               <span className="font-mono text-[11px] text-ink-3">
-                Holding · 00066642fdb1… · owner LumenStudio::1220df30…
+                Holding · 00066642fdb1… · owner amara.eth::1220df30…
               </span>
             </div>
           </div>
@@ -265,17 +264,17 @@ function CtaBand() {
       <div className="mx-auto max-w-3xl px-5 text-center sm:px-8">
         <Reveal>
           <h2 className="text-[clamp(2rem,5vw,3.2rem)] font-semibold tracking-[-0.025em] text-ink">
-            Stop leaking your payroll.
+            Stop leaking your treasury.
           </h2>
           <p className="mx-auto mt-4 max-w-md text-[16px] leading-relaxed text-ink-2">
-            Pay everyone at once. Show no one the others.
+            Pay every contributor at once. Show no one the others.
           </p>
           <div className="mt-8 flex items-center justify-center gap-3">
             <a
-              href="/app"
+              href="/build"
               className="inline-flex items-center gap-2 rounded-xl bg-ink px-5 py-2.5 text-[14px] font-medium text-page transition-colors hover:bg-white"
             >
-              Open the console
+              Open your workspace
               <Icon name="arrow-right" size={15} strokeWidth={2} />
             </a>
           </div>

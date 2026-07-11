@@ -1,15 +1,17 @@
-// The sample batch behind the interactive hero — the real Lumen Studio roster
-// from the demo, projected per lens. This is the whole product on one screen.
+// The sample batch behind the interactive hero — a crypto-native team (Nova DAO)
+// paying its contributor roster, projected per lens. Everyone is self-custodied:
+// each contributor is their own wallet, paid to a party Sotto never controls.
+// This is the whole product on one screen.
 
 export type Lens = "payer" | "recipient" | "auditor" | "approver";
 
 export const LENSES: Lens[] = ["payer", "recipient", "auditor", "approver"];
 
 export const LENS_LABEL: Record<Lens, string> = {
-  payer: "Payer",
-  recipient: "Recipient",
+  payer: "Treasury",
+  recipient: "Contributor",
   auditor: "Auditor",
-  approver: "Approver",
+  approver: "Signer",
 };
 
 // Stroke-icon name per lens (see components/icon.tsx).
@@ -21,30 +23,30 @@ export const LENS_ICON: Record<Lens, string> = {
 };
 
 export const WHO: Record<Lens, string> = {
-  payer: "Lumen Studio",
-  recipient: "Amara Okafor",
-  auditor: "Hale & Co.",
-  approver: "Priya Raman",
+  payer: "Nova DAO",
+  recipient: "amara.eth",
+  auditor: "Sable Audit",
+  approver: "jules.eth",
 };
 
 export type Row = { name: string; role: string; amount: number };
 
 export const BATCH: Row[] = [
-  { name: "Amara Okafor", role: "Sound design", amount: 4200 },
-  { name: "Tobi Adeyemi", role: "Motion", amount: 3850 },
-  { name: "Chen Wei", role: "Edit", amount: 5500 },
-  { name: "Diego Marquez", role: "Color", amount: 2900 },
-  { name: "Fatima Bello", role: "Production", amount: 4100 },
-  { name: "Kwame Nyong", role: "Score · milestone", amount: 32000 }, // over threshold
+  { name: "amara.eth", role: "Core protocol", amount: 4200 },
+  { name: "tobi.eth", role: "Smart contracts", amount: 3850 },
+  { name: "chen.eth", role: "Frontend", amount: 5500 },
+  { name: "luca.eth", role: "DevRel", amount: 2900 },
+  { name: "fatima.eth", role: "Governance", amount: 4100 },
+  { name: "mert.eth", role: "Protocol V2 · milestone", amount: 32000 }, // over threshold
 ];
 
 export const THRESHOLD = 25000;
 export const TOTAL = 52550; // verified sum of the six amounts
-export const YOU = 0; // the Recipient lens follows Amara (row 0)
+export const YOU = 0; // the Contributor lens follows amara.eth (row 0)
 
 // What each lens is allowed to reveal — the caption above the ledger.
 export const REVEALS: Record<Lens, string> = {
-  payer: "Reveals · names · roles · amounts · total",
+  payer: "Reveals · wallets · roles · amounts · total",
   recipient: "Reveals · your own line only",
   auditor: "Reveals · every receipt · read-only",
   approver: "Reveals · over-threshold only",
@@ -52,10 +54,10 @@ export const REVEALS: Record<Lens, string> = {
 
 // The hero lead line, written from the active party's point of view.
 export const LEAD: Record<Lens, string> = {
-  payer: "You're Lumen Studio. You see every name, role and amount before it leaves.",
-  recipient: "You're Amara Okafor. You see your own line — and nothing else in the batch.",
-  auditor: "You're Hale & Co. Every receipt, read-only. Visibility is granted, never assumed.",
-  approver: "You're Priya Raman. Only what crosses the threshold needs a second signer.",
+  payer: "You're Nova DAO. You see every contributor, role and amount before it leaves the treasury.",
+  recipient: "You're amara.eth. You see your own line — paid to your own wallet, and nothing else in the batch.",
+  auditor: "You're Sable Audit. Every receipt, read-only. Visibility is granted, never assumed.",
+  approver: "You're jules.eth, second signer. Only what crosses the threshold needs your key.",
 };
 
 // The ledger footer per lens: [label, sub-line, amount].
@@ -79,10 +81,11 @@ export function rowMode(lens: Lens, i: number, amount: number): RowMode {
 export const fmt = (n: number) =>
   n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Handles carry a dot (amara.eth) — split on it too so avatars read "AE", not "A".
 export const initials = (name: string) =>
   name
     .trim()
-    .split(/\s+/)
+    .split(/[\s.]+/)
     .slice(0, 2)
     .map((s) => s[0]?.toUpperCase() ?? "")
     .join("");

@@ -15,14 +15,14 @@ const plexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Sotto — confidential payouts on a public ledger",
+  title: "Sotto — confidential contributor payouts on Canton",
   description:
-    "Pay your whole team in one batch. Each party sees only their own line. A named auditor verifies everything. Privacy is enforced by the ledger, not the app.",
+    "Pay every contributor in one confidential batch. Each keeps their own wallet and sees only their own line. A named auditor verifies everything. Privacy is enforced by the ledger, not the app.",
   metadataBase: new URL("https://sotto.dev"),
   openGraph: {
-    title: "Sotto — confidential payouts on a public ledger",
+    title: "Sotto — confidential contributor payouts on Canton",
     description:
-      "One batch, four kinds of eyes. Each party sees only what they're allowed to — enforced by the ledger.",
+      "One batch, four kinds of eyes. Everyone keeps their own wallet and sees only what they're allowed to — enforced by the ledger.",
     type: "website",
   },
 };

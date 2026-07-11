@@ -23,16 +23,16 @@ export function SiteNav() {
         <div className="flex items-center gap-1.5">
           <ThemeToggle className="mr-1" />
           <a
-            href="/app"
+            href="/build"
             className="hidden rounded-lg px-3 py-1.5 text-[13.5px] text-ink-2 transition-colors hover:text-ink sm:block"
           >
             Sign in
           </a>
           <a
-            href="/app"
+            href="/build"
             className="rounded-lg bg-ink px-3.5 py-1.5 text-[13.5px] font-medium text-page transition-colors hover:bg-white"
           >
-            Open the console
+            Open workspace
           </a>
         </div>
       </div>

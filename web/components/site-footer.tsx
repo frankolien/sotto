@@ -11,7 +11,8 @@ export function SiteFooter() {
               <span className="text-[15px] font-semibold tracking-tight">Sotto</span>
             </div>
             <p className="mt-3 text-[13px] leading-relaxed text-ink-3">
-              Confidential payouts on a public ledger. Privacy enforced by the rail, not the app.
+              Confidential contributor payouts on Canton. Self-custody by default — privacy enforced
+              by the rail, not the app.
             </p>
           </div>
           <div className="grid grid-cols-2 gap-x-14 gap-y-2 sm:grid-cols-3">
