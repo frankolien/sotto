@@ -2,6 +2,7 @@ import cors from 'cors';
 import express, { Application } from 'express';
 
 import { LedgerController } from './controllers/ledger.controller.ts';
+import { OrgController } from './controllers/org.controller.ts';
 import { errorHandler, notFound } from './middleware/error-handler.ts';
 import { apiRoutes } from './routes/index.ts';
 import { SessionService } from './services/session.ts';
@@ -13,6 +14,7 @@ import { SessionService } from './services/session.ts';
  * server listens before bootstrap so the JWKS is reachable during it). */
 export function createApp(
   controller: LedgerController,
+  orgController: OrgController,
   sessions: SessionService,
   jwks?: () => unknown,
   isReady?: () => boolean,
@@ -25,7 +27,7 @@ export function createApp(
     app.use('/api', (_req, res, next) =>
       isReady() ? next() : res.status(503).json({ error: 'bootstrapping — retry shortly' }));
   }
-  app.use('/api', apiRoutes(controller, sessions));
+  app.use('/api', apiRoutes(controller, orgController, sessions));
   app.use(notFound);
   app.use(errorHandler);
   return app;

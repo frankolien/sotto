@@ -5,6 +5,9 @@ import { DevnetTokenFactory, HmacTokenFactory, Rs256TokenFactory, TokenFactory }
 import { CantonService } from './services/canton.service.ts';
 import { SigningKey } from './services/keys.ts';
 import { LedgerService } from './services/ledger.service.ts';
+import { OrgService } from './services/org.service.ts';
+import { OrgStore } from './services/org-store.ts';
+import { OrgController } from './controllers/org.controller.ts';
 import { SessionService } from './services/session.ts';
 
 async function main(): Promise<void> {
@@ -44,12 +47,17 @@ async function main(): Promise<void> {
   );
   const sessions = new SessionService(config.session.secret, config.session.ttlSeconds);
 
+  // Multi-tenant, self-custody workspace engine (additive; shares the Canton client).
+  const orgStore = new OrgStore(config.orgStore);
+  const orgService = new OrgService(canton, config.auth.adminUser, orgStore);
+  const orgController = new OrgController(orgService, sessions);
+
   // Listen FIRST, then bootstrap. In RS256 mode the node validates our tokens
   // against the JWKS we publish, so that endpoint must be reachable before the
   // first authenticated ledger call init() makes — otherwise bootstrap deadlocks.
   // (/api calls 503 until bootstrap finishes; the client already polls/retries.)
   let ready = false;
-  const app = createApp(new LedgerController(ledger, sessions), sessions, jwks, () => ready);
+  const app = createApp(new LedgerController(ledger, sessions), orgController, sessions, jwks, () => ready);
   app.listen(config.port, () => console.log(`Sotto backend on http://localhost:${config.port}`));
 
   console.log(`Bootstrapping Sotto on Canton (${config.ledgerMode}, ${config.ledgerJsonApi})…`);

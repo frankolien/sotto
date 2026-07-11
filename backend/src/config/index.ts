@@ -42,6 +42,7 @@ export interface AppConfig {
   ledgerMode: 'local' | 'devnet';
   ledgerJsonApi: string;
   sottoDar: string;
+  orgStore: string;
   auth: {
     // 'hmac' = dev shared secret; 'rs256' = production-shape asymmetric + JWKS.
     mode: 'hmac' | 'rs256';
@@ -83,6 +84,8 @@ export const config: AppConfig = {
   sottoDar:
     process.env.SOTTO_DAR ??
     resolve(import.meta.dirname, '../../../daml/sotto/.daml/dist/sotto-0.1.0.dar'),
+  // Durable multi-tenant org store (gitignored). Swap for Postgres later.
+  orgStore: process.env.ORG_STORE ?? resolve(import.meta.dirname, '../../data/orgs.json'),
   auth: {
     mode: authMode,
     secret: process.env.AUTH_SECRET ?? 'sotto-dev-hs256-secret-change-me-please-0123456789',

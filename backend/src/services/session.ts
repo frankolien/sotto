@@ -13,6 +13,12 @@ import { Role, ROLES } from '../models/types.ts';
 
 export interface Principal {
   role: Role;
+  /** The workspace this session is scoped to (multi-tenant org routes). Absent for
+   * the legacy single-tenant demo session. */
+  orgId?: string;
+  /** A contributor session is scoped to exactly one party — its own wallet — so a
+   * recipient magic link can only ever read that party's payments. */
+  party?: string;
 }
 
 const b64 = (obj: unknown): string => Buffer.from(JSON.stringify(obj)).toString('base64url');
@@ -23,11 +29,19 @@ export class SessionService {
     private readonly ttlSeconds = 3600,
   ) {}
 
-  /** Issue a session token for an authenticated principal. */
-  issue(role: Role): string {
+  /** Issue a session token for an authenticated principal, optionally scoped to a
+   * workspace (org) and — for a contributor magic link — a single party.
+   * `ttlOverride` lets a shareable link outlive a normal session. */
+  issue(role: Role, orgId?: string, party?: string, ttlOverride?: number): string {
     const header = { alg: 'HS256', typ: 'JWT' };
     const now = Math.floor(Date.now() / 1000);
-    const payload = { role, iat: now, exp: now + this.ttlSeconds };
+    const payload = {
+      role,
+      ...(orgId ? { orgId } : {}),
+      ...(party ? { party } : {}),
+      iat: now,
+      exp: now + (ttlOverride ?? this.ttlSeconds),
+    };
     const input = `${b64(header)}.${b64(payload)}`;
     const sig = crypto.createHmac('sha256', this.secret).update(input).digest('base64url');
     return `${input}.${sig}`;
@@ -42,7 +56,7 @@ export class SessionService {
     if (sig.length !== expected.length || !crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) {
       return null;
     }
-    let payload: { role?: unknown; exp?: unknown };
+    let payload: { role?: unknown; orgId?: unknown; party?: unknown; exp?: unknown };
     try {
       payload = JSON.parse(Buffer.from(p, 'base64url').toString());
     } catch {
@@ -50,6 +64,10 @@ export class SessionService {
     }
     if (typeof payload.exp === 'number' && payload.exp < Math.floor(Date.now() / 1000)) return null;
     if (typeof payload.role !== 'string' || !ROLES.has(payload.role as Role)) return null;
-    return { role: payload.role as Role };
+    return {
+      role: payload.role as Role,
+      orgId: typeof payload.orgId === 'string' ? payload.orgId : undefined,
+      party: typeof payload.party === 'string' ? payload.party : undefined,
+    };
   }
 }

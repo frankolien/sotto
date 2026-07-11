@@ -33,3 +33,4 @@ frontend/**/*.iml
 .DS_Store
 *.swp
 log/
+backend/data/

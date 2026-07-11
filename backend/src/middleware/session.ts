@@ -27,6 +27,20 @@ export function requireSession(sessions: SessionService) {
   };
 }
 
+/** Require the session to be scoped to a workspace (org). Use after requireSession
+ * on the multi-tenant org routes. */
+export function requireOrg(req: Request, _res: Response, next: NextFunction): void {
+  if (!req.principal?.orgId) throw new HttpError(403, 'a workspace session is required');
+  next();
+}
+
+/** Require a contributor session — scoped to one workspace AND one party (its own
+ * wallet). The recipient magic link. */
+export function requireContributor(req: Request, _res: Response, next: NextFunction): void {
+  if (!req.principal?.orgId || !req.principal?.party) throw new HttpError(403, 'a contributor session is required');
+  next();
+}
+
 /** Require the session's principal to hold one of the given roles. */
 export function requireRole(...roles: Role[]) {
   return (req: Request, _res: Response, next: NextFunction): void => {

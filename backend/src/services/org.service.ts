@@ -331,6 +331,35 @@ export class OrgService {
     return { party, balance, contracts };
   }
 
+  /** The contributor's own view: their payments from this org and their balance,
+   * read AS their wallet — so it contains only what the ledger discloses to them. */
+  async received(orgId: string, party: string): Promise<{
+    org: string;
+    asset: string;
+    balance: number;
+    payments: { amount: number; from: string; batchRef: string; at: string }[];
+  }> {
+    const org = this.require(orgId);
+    const user = await this.viewUser(party);
+    const [receipts, holdings] = await Promise.all([
+      this.canton.activeContracts(party, user, ['DisbursementReceipt']),
+      this.canton.activeContracts(party, user, ['Holding']),
+    ]);
+    const balance = holdings
+      .filter((h) => h.createArgument.owner === party)
+      .reduce((a, h) => a + num(h.createArgument.amount), 0);
+    const payments = receipts
+      .filter((r) => r.createArgument.recipient === party)
+      .map((r) => ({
+        amount: num(r.createArgument.amount),
+        from: org.config.name,
+        batchRef: String(r.createArgument.batchRef ?? ''),
+        at: r.createdAt ?? '',
+      }))
+      .sort((a, b) => b.at.localeCompare(a.at));
+    return { org: org.config.name, asset: org.config.asset, balance, payments };
+  }
+
   private require(orgId: string): Org {
     const org = this.store.get(orgId);
     if (!org) throw new Error(`unknown org: ${orgId}`);
