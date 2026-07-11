@@ -32,3 +32,4 @@ frontend/**/*.iml
 # OS / editor
 .DS_Store
 *.swp
+log/

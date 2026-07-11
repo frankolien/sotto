@@ -2,26 +2,19 @@
 
 import { useEffect, useState } from "react";
 import {
-  BATCH,
   fmt,
   initials,
   LENS_ICON,
   LENS_LABEL,
   LENSES,
   REVEALS,
-  rowMode,
-  THRESHOLD,
   WHO,
-  YOU,
   type Lens,
-  type Row,
-  type RowMode,
 } from "@/lib/batch";
-import { ACTIONS, ACTIVITY, INFO, STATS } from "@/lib/console";
+import { ACTIONS, INFO } from "@/lib/console";
+import { useLedger, type LedgerState, type RowStatus, type Stat, type ViewRow } from "@/lib/ledger";
 import { Icon, SottoMark } from "./icon";
 import { ThemeToggle } from "./theme-toggle";
-
-const fmt0 = (n: number) => n.toLocaleString("en-US");
 
 export function Console() {
   const [lens, setLens] = useState<Lens | null>(null);
@@ -122,7 +115,6 @@ function IdentityCard({ lens, featured }: { lens: Lens; featured?: boolean }) {
 /* ── Dashboard ────────────────────────────────────────────────────────────── */
 
 type View = "overview" | "batch" | "activity" | "mandate";
-type Decided = null | "approved" | "held";
 
 const NAV: { label: string; icon: string; id: View }[] = [
   { label: "Overview", icon: "layers", id: "overview" },
@@ -133,55 +125,12 @@ const NAV: { label: string; icon: string; id: View }[] = [
 
 function Dashboard({ lens, onSwitch }: { lens: Lens; onSwitch: () => void }) {
   const [view, setView] = useState<View>("overview");
-  // The payer pays the batch out; every other identity is looking at a batch the
-  // payer has already settled. Actions mutate this state so the change is visible.
-  const [settled, setSettled] = useState(lens !== "payer");
-  const [decided, setDecided] = useState<Decided>(null);
-  const [busy, setBusy] = useState<string | null>(null);
-  const [result, setResult] = useState<string | null>(null);
+  const { state, source, busy, result, setResult, run } = useLedger(lens);
 
   useEffect(() => {
     const v = new URLSearchParams(window.location.search).get("view");
     if (v && NAV.some((n) => n.id === v)) setView(v as View);
   }, []);
-
-  useEffect(() => {
-    if (!result) return;
-    const t = setTimeout(() => setResult(null), 7000);
-    return () => clearTimeout(t);
-  }, [result]);
-
-  const runAction = (label: string) => {
-    if (busy) return;
-    setBusy(label);
-    // Simulate the round-trip the live rail makes to Canton.
-    setTimeout(() => {
-      setBusy(null);
-      switch (label) {
-        case "Pay out batch":
-          setSettled(true);
-          setResult(
-            "Batch settled on Canton — 5 lines cleared in one atomic transaction. Kwame Nyong · 32,000 is held for Priya Raman’s signature.",
-          );
-          break;
-        case "Approve":
-          setDecided("approved");
-          setResult("Approved — Kwame Nyong’s 32,000 settled. Maker–checker complete.");
-          break;
-        case "Hold":
-          setDecided("held");
-          setResult("Held — the 32,000 will not settle without a second signer.");
-          break;
-        case "Cash out":
-          setResult("4,200.00 USDCx routed to your linked account · demo off-ramp.");
-          break;
-        default:
-          setResult(`${label} · demo.`);
-      }
-    }, 1000);
-  };
-
-  const treasury = 312480 - (settled ? 20550 : 0) - (decided === "approved" ? 32000 : 0);
 
   return (
     <div className="flex min-h-screen">
@@ -189,14 +138,24 @@ function Dashboard({ lens, onSwitch }: { lens: Lens; onSwitch: () => void }) {
 
       <div className="flex min-h-screen min-w-0 flex-1 flex-col">
         <MobileBar lens={lens} onSwitch={onSwitch} view={view} onView={setView} />
-        <DashHeader lens={lens} treasury={treasury} busy={busy} settled={settled} decided={decided} onAction={runAction} />
+        <DashHeader lens={lens} state={state} source={source} busy={busy} onAction={run} />
         {result && <ResultBanner msg={result} onClose={() => setResult(null)} />}
 
         <main className="flex-1 px-5 py-6 lg:px-8">
-          {view === "overview" && <OverviewView lens={lens} settled={settled} decided={decided} onView={setView} />}
-          {view === "batch" && <BatchView lens={lens} settled={settled} decided={decided} />}
-          {view === "activity" && <ActivityView lens={lens} />}
-          {view === "mandate" && <MandateView lens={lens} />}
+          {source === "loading" ? (
+            <div className="flex h-64 items-center justify-center text-ink-3">
+              <span className="flex items-center gap-2.5 text-[13px]">
+                <Spinner /> Connecting to the ledger…
+              </span>
+            </div>
+          ) : (
+            <>
+              {view === "overview" && <OverviewView lens={lens} state={state} onView={setView} />}
+              {view === "batch" && <BatchView lens={lens} state={state} />}
+              {view === "activity" && <ActivityView lens={lens} state={state} />}
+              {view === "mandate" && <MandateView lens={lens} />}
+            </>
+          )}
         </main>
       </div>
     </div>
@@ -318,40 +277,41 @@ function MobileBar({
   );
 }
 
-function headlineFor(lens: Lens, treasury: number, decided: Decided): [string, number, string] {
-  switch (lens) {
-    case "payer":
-      return ["Treasury", treasury, "USDCx · Lumen Studio"];
-    case "recipient":
-      return ["Your balance", 4200, "USDCx · settled"];
-    case "auditor":
-      return ["Batch under audit", 52550, "USDCx · 6 receipts"];
-    case "approver":
-      return [decided ? "Signed off" : "Awaiting your signature", decided ? 0 : 32000, "USDCx · 1 payment"];
-  }
-}
-
 function Spinner() {
   return <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />;
 }
 
+function SourceBadge({ source }: { source: "live" | "demo" | "loading" }) {
+  if (source === "loading") return null;
+  const live = source === "live";
+  return (
+    <span
+      title={live ? "Reading the live Canton ledger" : "Self-contained demo data"}
+      className={`hidden items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium sm:inline-flex ${
+        live ? "border-good/30 bg-good/10 text-good" : "border-line-2 bg-surface-2 text-ink-3"
+      }`}
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-good" : "bg-ink-3"}`} />
+      {live ? "Live · Canton" : "Demo data"}
+    </span>
+  );
+}
+
 function DashHeader({
   lens,
-  treasury,
+  state,
+  source,
   busy,
-  settled,
-  decided,
   onAction,
 }: {
   lens: Lens;
-  treasury: number;
+  state: LedgerState;
+  source: "live" | "demo" | "loading";
   busy: string | null;
-  settled: boolean;
-  decided: Decided;
   onAction: (label: string) => void;
 }) {
-  const [label, value, sub] = headlineFor(lens, treasury, decided);
-  const done = (lens === "payer" && settled) || (lens === "approver" && decided !== null);
+  const { label, value, sub } = state.headline;
+  const done = (lens === "payer" && state.settled) || (lens === "approver" && state.decided !== null);
   return (
     <header className="sticky top-0 z-30 flex flex-wrap items-center justify-between gap-4 border-b border-line bg-page/80 px-5 py-4 backdrop-blur-xl lg:px-8">
       <div>
@@ -364,10 +324,11 @@ function DashHeader({
         </div>
       </div>
       <div className="flex items-center gap-2">
+        <SourceBadge source={source} />
         {done ? (
           <span className="inline-flex items-center gap-2 rounded-xl border border-good/30 bg-good/10 px-4 py-2 text-[13.5px] font-medium text-good">
             <Icon name="check" size={15} strokeWidth={2.2} />
-            {lens === "payer" ? "Batch settled" : decided === "approved" ? "Approved" : "Held"}
+            {lens === "payer" ? "Batch settled" : state.decided === "approved" ? "Approved" : "Held"}
           </span>
         ) : (
           ACTIONS[lens].map((a) => (
@@ -407,43 +368,10 @@ function ResultBanner({ msg, onClose }: { msg: string; onClose: () => void }) {
 
 /* ── Views ────────────────────────────────────────────────────────────────── */
 
-function statsFor(lens: Lens, settled: boolean, decided: Decided): { label: string; value: string; sub?: string }[] {
-  if (lens === "payer") {
-    const treasury = 312480 - (settled ? 20550 : 0) - (decided === "approved" ? 32000 : 0);
-    const moved = (settled ? 20550 : 0) + (decided === "approved" ? 32000 : 0);
-    const pending = settled && decided === null ? 1 : 0;
-    return [
-      { label: "Treasury", value: fmt0(treasury), sub: "USDCx available" },
-      { label: "This cycle", value: fmt0(moved), sub: "of 200,000 cap" },
-      { label: "Recipients", value: "6", sub: "in this batch" },
-      { label: "Pending approval", value: String(pending), sub: pending ? "over threshold" : "all cleared" },
-    ];
-  }
-  if (lens === "approver") {
-    return [
-      { label: "Awaiting signature", value: decided ? "0" : "32,000", sub: "USDCx" },
-      { label: "Over threshold", value: "1 / 6", sub: "needs you" },
-      { label: "Settled without you", value: "5", sub: "under 25,000" },
-      { label: "Threshold", value: "25,000", sub: "per payment" },
-    ];
-  }
-  return STATS[lens];
-}
-
-function OverviewView({
-  lens,
-  settled,
-  decided,
-  onView,
-}: {
-  lens: Lens;
-  settled: boolean;
-  decided: Decided;
-  onView: (v: View) => void;
-}) {
+function OverviewView({ lens, state, onView }: { lens: Lens; state: LedgerState; onView: (v: View) => void }) {
   return (
     <>
-      <StatsRow stats={statsFor(lens, settled, decided)} />
+      <StatsRow stats={state.stats} />
       <div className="mt-6 grid gap-5 lg:grid-cols-3">
         <SnapshotCard lens={lens} onView={onView} className="lg:col-span-2" />
         <InfoCard lens={lens} />
@@ -452,14 +380,14 @@ function OverviewView({
   );
 }
 
-function BatchView({ lens, settled, decided }: { lens: Lens; settled: boolean; decided: Decided }) {
-  return <BatchTable lens={lens} settled={settled} decided={decided} />;
+function BatchView({ lens, state }: { lens: Lens; state: LedgerState }) {
+  return <BatchTable lens={lens} state={state} />;
 }
 
-function ActivityView({ lens }: { lens: Lens }) {
+function ActivityView({ lens, state }: { lens: Lens; state: LedgerState }) {
   return (
     <div className="grid gap-5 lg:grid-cols-3">
-      <ActivityCard lens={lens} className="lg:col-span-2" />
+      <ActivityCard activity={state.activity} className="lg:col-span-2" />
       <InfoCard lens={lens} />
     </div>
   );
@@ -474,7 +402,7 @@ function MandateView({ lens }: { lens: Lens }) {
   );
 }
 
-function StatsRow({ stats }: { stats: { label: string; value: string; sub?: string }[] }) {
+function StatsRow({ stats }: { stats: Stat[] }) {
   return (
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       {stats.map((s) => (
@@ -515,21 +443,8 @@ function SnapshotCard({ lens, onView, className }: { lens: Lens; onView: (v: Vie
 
 /* ── The ledger, as a table ───────────────────────────────────────────────── */
 
-type Status = "settled" | "held" | "confidential" | "needs-you" | "queued";
-
-function statusFor(lens: Lens, mode: RowMode, amount: number, settled: boolean, decided: Decided): Status {
-  if (mode === "redacted") return "confidential";
-  const over = amount > THRESHOLD;
-  if (over) {
-    if (decided === "approved") return "settled";
-    if (decided === "held") return "held";
-    return lens === "approver" ? "needs-you" : "held";
-  }
-  return settled ? "settled" : "queued";
-}
-
-function StatusBadge({ status }: { status: Status }) {
-  const map: Record<Status, { label: string; cls: string; icon: string }> = {
+function StatusBadge({ status }: { status: RowStatus }) {
+  const map: Record<RowStatus, { label: string; cls: string; icon: string }> = {
     settled: { label: "Settled", cls: "border-good/30 bg-good/10 text-good", icon: "check" },
     held: { label: "Held · approval", cls: "border-warn/30 bg-warn/10 text-warn", icon: "shield" },
     "needs-you": { label: "Needs you", cls: "border-warn/30 bg-warn/10 text-warn", icon: "shield" },
@@ -545,7 +460,7 @@ function StatusBadge({ status }: { status: Status }) {
   );
 }
 
-function BatchTable({ lens, settled, decided }: { lens: Lens; settled: boolean; decided: Decided }) {
+function BatchTable({ lens, state }: { lens: Lens; state: LedgerState }) {
   return (
     <div>
       <div className="mb-2.5 flex items-center justify-between">
@@ -559,28 +474,24 @@ function BatchTable({ lens, settled, decided }: { lens: Lens; settled: boolean; 
           <div className="mono-label text-[9.5px] text-ink-3">Status</div>
           <div className="mono-label text-right text-[9.5px] text-ink-3">Amount</div>
         </div>
-        <div className="divide-y divide-line">
-          {BATCH.map((r, i) => {
-            const mode = rowMode(lens, i, r.amount);
-            return (
-              <BatchRow
-                key={r.name}
-                row={r}
-                mode={mode}
-                status={statusFor(lens, mode, r.amount, settled, decided)}
-                highlight={lens === "recipient" && i === YOU}
-              />
-            );
-          })}
-        </div>
+        {state.rows.length === 0 ? (
+          <div className="px-4 py-10 text-center text-[13px] text-ink-3">
+            Nothing has been disbursed to you in this batch — there is no line for the ledger to show you.
+          </div>
+        ) : (
+          <div className="divide-y divide-line">
+            {state.rows.map((r) => (
+              <BatchRow key={r.id} row={r} highlight={lens === "recipient" && r.you} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function BatchRow({ row, mode, status, highlight }: { row: Row; mode: RowMode; status: Status; highlight: boolean }) {
-  const redacted = mode === "redacted";
-  const dimmed = mode === "dimmed";
+function BatchRow({ row, highlight }: { row: ViewRow; highlight: boolean }) {
+  const { redacted, dimmed } = row;
   return (
     <div
       className={`grid grid-cols-[1.4fr_auto_auto] items-center gap-4 px-4 py-3 transition-colors sm:grid-cols-[1.5fr_1fr_auto_auto] ${
@@ -603,10 +514,10 @@ function BatchRow({ row, mode, status, highlight }: { row: Row; mode: RowMode; s
         {redacted ? "—" : row.role}
       </div>
       <div>
-        <StatusBadge status={status} />
+        <StatusBadge status={row.status} />
       </div>
       <div className="text-right">
-        {redacted ? (
+        {redacted || row.amount === null ? (
           <span className="mono-label text-[10px] text-ink-3">•••••</span>
         ) : (
           <span className={`font-mono text-[13.5px] font-semibold tabular-nums ${dimmed ? "text-ink-3" : "text-ink"}`}>
@@ -620,16 +531,16 @@ function BatchRow({ row, mode, status, highlight }: { row: Row; mode: RowMode; s
 
 /* ── Side panels ──────────────────────────────────────────────────────────── */
 
-function ActivityCard({ lens, className }: { lens: Lens; className?: string }) {
+function ActivityCard({ activity, className }: { activity: { title: string; meta: string }[]; className?: string }) {
   return (
     <div className={`rounded-xl border border-line bg-surface/50 p-5 ${className ?? ""}`}>
       <h3 className="text-[14px] font-semibold tracking-tight text-ink">Activity</h3>
       <div className="mt-4 space-y-3.5">
-        {ACTIVITY[lens].map((a, i) => (
+        {activity.map((a, i) => (
           <div key={i} className="flex gap-3">
             <div className="mt-1 flex flex-col items-center">
               <span className="h-1.5 w-1.5 rounded-full bg-accent-2" />
-              {i < ACTIVITY[lens].length - 1 && <span className="mt-1 w-px flex-1 bg-line" />}
+              {i < activity.length - 1 && <span className="mt-1 w-px flex-1 bg-line" />}
             </div>
             <div className="pb-1">
               <div className="text-[13px] font-medium text-ink">{a.title}</div>

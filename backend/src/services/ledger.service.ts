@@ -11,6 +11,7 @@
 // There is no longer a single identity that can act/read as everyone. A self-
 // custody counterparty would simply hold its own user's token on its own node.
 
+import type { DevnetConfig } from '../config/index.ts';
 import {
   BATCH_ID,
   BATCH_LABEL,
@@ -61,6 +62,10 @@ export class LedgerService {
   constructor(
     private readonly canton: CantonService,
     private readonly adminUser: string,
+    // Present → run against the hackathon DevNet node: parties are pre-allocated
+    // by the operator and the DAR is already uploaded, so there is nothing to
+    // provision — just bind the fixed parties and (re)establish the mandate.
+    private readonly devnet?: DevnetConfig,
   ) {}
 
   private nextCommandId(): string {
@@ -71,6 +76,7 @@ export class LedgerService {
    * the bounded custodian user, then apply the default config (which allocates
    * the approver/auditor/recipient parties and their scoped users). */
   async init(darPath: string): Promise<void> {
+    if (this.devnet) return this.initDevnet();
     await this.canton.uploadDar(darPath, this.adminUser);
     this.issuer = await this.canton.ensureParty('Issuer', this.adminUser);
     this.payer = await this.canton.ensureParty('LumenStudio', this.adminUser);
@@ -82,8 +88,78 @@ export class LedgerService {
     await this.applyConfig(DEFAULT_CONFIG);
   }
 
+  /** DevNet bootstrap: bind the operator-allocated parties (no allocation, no DAR
+   * upload) and establish the mandate. The USDCx issuer collapses into the payer
+   * — one on-ledger signatory — since devnet gives us one party per role. */
+  private async initDevnet(): Promise<void> {
+    const d = this.devnet!;
+    this.payer = d.parties.payer;
+    this.issuer = d.parties.payer;
+    this.auditorParty = d.parties.auditor;
+    this.approverParty = d.parties.approver;
+    // On devnet one external token serves every call, so these user ids are only
+    // labels; pin them to the token subject so logs stay coherent.
+    this.approverUser = d.userId;
+    this.auditorUser = d.userId;
+    await this.applyDevnetConfig();
+  }
+
+  /** (Re)establish the fixed devnet batch: two real recipient parties, a funded
+   * treasury and the mandate. Archives any prior Sotto state first, so a restart
+   * or /reset returns a clean, unsettled batch. */
+  private async applyDevnetConfig(): Promise<void> {
+    const d = this.devnet!;
+    this.cfg = DEFAULT_CONFIG;
+    this.settled = false;
+    this.proposalCid.clear();
+    this.proposalTreasury.clear();
+
+    // Fixed roster → the two operator-allocated recipient parties. One clears under
+    // the threshold (atomic settle); one exceeds it (maker-checker).
+    this.roster = [
+      { id: 'r1', hint: 'recipient-sotto', name: 'Amara Okafor', role: 'Sound design', handle: 'amara.lumen', amount: 4200 },
+      { id: 'r6', hint: 'recipient2-sotto', name: 'Kwame Nyong', role: 'Score · milestone', handle: 'kwame.lumen', amount: 32000 },
+    ];
+    this.youId = 'r1';
+    this.recipientParty.clear();
+    this.recipientUser.clear();
+    this.recipientParty.set('r1', d.parties.recipient);
+    this.recipientParty.set('r6', d.parties.recipient2);
+    this.recipientUser.set('r1', d.userId);
+    this.recipientUser.set('r6', d.userId);
+    this.lineStatus = new Map(this.roster.map((r) => [r.id, 'draft' as LineStatus]));
+
+    await this.archiveAll();
+
+    // Issuer (collapsed into the payer) mints the treasury holding.
+    await this.canton.submit(
+      [this.issuer],
+      [this.canton.create('Holding', { issuer: this.issuer, owner: this.payer, amount: dec(this.cfg.treasury) })],
+      this.nextCommandId(),
+      d.userId,
+    );
+
+    // Payer establishes the mandate over the two recipient parties.
+    const created = await this.canton.submit(
+      [this.payer, this.issuer],
+      [this.canton.create('PayoutMandate', {
+        payer: this.payer,
+        issuer: this.issuer,
+        auditor: this.auditorParty,
+        approver: this.approverParty,
+        cap: dec(this.cfg.cap),
+        threshold: dec(this.cfg.threshold),
+        approved: [d.parties.recipient, d.parties.recipient2],
+      })],
+      this.nextCommandId(),
+      d.userId,
+    );
+    this.mandateCid =
+      created.find((e) => e.templateId.endsWith(':PayoutMandate'))?.contractId ?? this.mandateCid;
+  }
+
   configure(cfg: RailConfig): Promise<void> {
-    return this.applyConfig(cfg);
+    return this.devnet ? this.applyDevnetConfig() : this.applyConfig(cfg);
   }
 
   /** Custodial JIT wallet provisioning — the "embedded wallet" of first login.
@@ -94,6 +170,11 @@ export class LedgerService {
    * we'd skip allocation. NOTE: holding ≠ receiving a payout — the payer must add
    * this party to a mandate's approved roster before it can be disbursed to. */
   async provisionWallet(subject: string): Promise<{ party: string; user: string }> {
+    if (this.devnet) {
+      // Party allocation needs participant-admin rights we don't hold on the shared
+      // devnet node — the operator pre-allocates the roster instead.
+      throw new Error('wallet provisioning is disabled on devnet (parties are pre-allocated by the node operator)');
+    }
     const hint = partyHint(subject, 'Wallet');
     const party = await this.canton.ensureParty(hint, this.adminUser);
     const user = userForParty(party);
@@ -106,7 +187,7 @@ export class LedgerService {
   }
 
   reset(): Promise<void> {
-    return this.applyConfig(DEFAULT_CONFIG);
+    return this.devnet ? this.applyDevnetConfig() : this.applyConfig(DEFAULT_CONFIG);
   }
 
   /** The party a role reads, and the user whose token reads it. */
@@ -269,25 +350,33 @@ export class LedgerService {
   async approve(lineId: string): Promise<void> {
     const cid = this.proposalCid.get(lineId);
     if (!cid) return;
-    // The approver isn't a stakeholder of the payer's treasury Holding, but the
-    // Approve choice fetches it. Disclose that ONE contract explicitly (the
-    // custodian reads its blob) — no broad readAs of the payer's book.
-    const treasuryCid = this.proposalTreasury.get(lineId);
-    const disclosed = [];
-    if (treasuryCid) {
-      const holdings = await this.canton.activeContracts(this.payer, this.CUSTODIAN, ['Holding'], true);
-      const t = holdings.find((h) => h.contractId === treasuryCid);
-      if (t?.createdEventBlob) {
-        disclosed.push({ templateId: t.templateId, contractId: treasuryCid, createdEventBlob: t.createdEventBlob });
+    const approve = this.canton.exercise('LargePaymentProposal', cid, 'Approve', {});
+
+    if (this.devnet) {
+      // One external identity can read the payer, so the Approve choice's
+      // `fetch treasury` is satisfied with a transaction-scoped readAs — no
+      // cross-node disclosure blob needed. (readAs here is used only inside the
+      // choice; it never widens what the approver's own ACS returns.)
+      await this.canton.submit([this.approverParty], [approve], this.nextCommandId(), this.approverUser, {
+        readAs: [this.payer],
+      });
+    } else {
+      // Local: the approver isn't a stakeholder of the payer's treasury Holding,
+      // but the Approve choice fetches it. Disclose that ONE contract explicitly
+      // (the custodian reads its blob) — no broad readAs of the payer's book.
+      const treasuryCid = this.proposalTreasury.get(lineId);
+      const disclosed = [];
+      if (treasuryCid) {
+        const holdings = await this.canton.activeContracts(this.payer, this.CUSTODIAN, ['Holding'], true);
+        const t = holdings.find((h) => h.contractId === treasuryCid);
+        if (t?.createdEventBlob) {
+          disclosed.push({ templateId: t.templateId, contractId: treasuryCid, createdEventBlob: t.createdEventBlob });
+        }
       }
+      await this.canton.submit([this.approverParty], [approve], this.nextCommandId(), this.approverUser, {
+        disclosedContracts: disclosed,
+      });
     }
-    await this.canton.submit(
-      [this.approverParty],
-      [this.canton.exercise('LargePaymentProposal', cid, 'Approve', {})],
-      this.nextCommandId(),
-      this.approverUser,
-      { disclosedContracts: disclosed },
-    );
     this.lineStatus.set(lineId, 'settled');
     this.proposalCid.delete(lineId);
     this.proposalTreasury.delete(lineId);

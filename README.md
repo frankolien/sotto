@@ -12,6 +12,36 @@ This repository is the **hackathon MVP** for *Build on Canton* (ENCODE Club, kic
 
 ---
 
+## Live on Canton DevNet ✅
+
+Sotto is **deployed and running on the Canton Network DevNet** — not a local sandbox. The
+four Daml contracts are uploaded to a live participant, and the backend in this repo drives
+the whole payout flow — atomic settle, maker-checker, per-party privacy — against that node
+over the real JSON Ledger API.
+
+| | |
+|---|---|
+| **Network** | Canton **DevNet** |
+| **Package ID** | `234ef2a25479923e655f59db3df946705bd3a4476d8b95e03d8cd2ceb73f23fa` — the SHA-256 of the Daml in [`daml/sotto`](daml/sotto); it *is* the `.dar` in this repo, byte-for-byte |
+| **Participant** | `PAR::hackcanton-devnet-2::1220…effa668` (operated by NODERS, via 5N Seaport) |
+| **Parties** | `payer-sotto`, `recipient-sotto`, `recipient2-sotto`, `approver-sotto`, `auditor-sotto` |
+| **Explorer** | [Lighthouse — verify it yourself](https://lighthouse.devnet.cantonloop.com/party/hackcanton-devnet-1%3A%3A122003aa7c491e00a453145c4d2cd3dbf5db8908b4e663c9944baed57fd66effa668/validator) |
+
+**Verified on-chain**, read back through the backend's own API — every figure is Canton's
+answer to *that party's* token, not the app's choice:
+
+| after | payer | recipient (Amara) | approver | auditor |
+|---|---|---|---|---|
+| **settle** | treasury 308,280 · Amara ✓ / Kwame held | **sees only her own 4,200** | **sees only Kwame's line** | sees both lines |
+| **approve** | treasury 276,280 · both settled | 4,200 | Kwame settled | both settled |
+
+Treasury math (312,480 → −4,200 → −32,000 = 276,280) is the ledger's. Run it against devnet
+yourself with `cd backend && LEDGER_MODE=devnet npm start` (needs devnet credentials in
+`backend/.env.local`). The web console points at the backend via `NEXT_PUBLIC_API_URL` and
+falls back to seeded data if the node is unreachable — so the demo is always solid.
+
+---
+
 ## Judges — start here
 
 1. **Run the web console** (the submission surface):
@@ -30,11 +60,11 @@ This repository is the **hackathon MVP** for *Build on Canton* (ENCODE Club, kic
    proven by the Daml model and the backend below — run `dpm test` (last section) to
    watch each party's visibility get *asserted*, not just narrated.
 
-> **Honesty note:** the web console runs on **seeded sample figures** so the demo is
-> rock-solid and never depends on a live chain being up. The confidentiality and atomic
-> settlement it shows are the *real* mechanism — implemented in the Daml model and the
-> Canton-backed backend in this same repo. The console's data layer is shaped to swap
-> those seeds for the live API behind the same interface.
+> **Honesty note:** the *public* web console defaults to **seeded sample figures** so the
+> demo is rock-solid and never depends on a live chain being up — but the same console runs
+> on **live Canton DevNet** when pointed at the backend (see [Live on Canton DevNet](#live-on-canton-devnet-)
+> above). The confidentiality and atomic settlement it shows are the *real* mechanism —
+> implemented in the Daml model and proven on devnet through the backend in this same repo.
 
 ---
 
@@ -93,6 +123,7 @@ invisible — the privacy is the only thing you notice.
 - **Docker** — for a local Canton network when the demo moves on-ledger.
 - **Flutter** — the long-term mobile surface.
 
+## Quick start — web console (the demo)
 
 Requires Node 20+.
 

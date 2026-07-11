@@ -54,7 +54,7 @@ export class CantonService {
     const headers: Record<string, string> = {
       'Content-Type': raw ? 'application/octet-stream' : 'application/json',
     };
-    if (user) headers.Authorization = `Bearer ${this.tokens.forUser(user)}`;
+    if (user) headers.Authorization = `Bearer ${await this.tokens.forUser(user)}`;
     const res = await fetch(`${this.baseUrl}${path}`, {
       method,
       headers,
@@ -173,9 +173,13 @@ export class CantonService {
         commands: {
           commands,
           commandId,
-          actAs,
+          // Dedupe actAs: on devnet the issuer collapses into the payer, so a
+          // command can name the same party twice.
+          actAs: [...new Set(actAs)],
           readAs: opts.readAs ?? [],
-          userId: user,
+          // Local factories submit as the requested user; the devnet factory pins
+          // every command to its single token subject.
+          userId: this.tokens.userId ? this.tokens.userId(user) : user,
           deduplicationPeriod: { Empty: {} },
           ...(opts.disclosedContracts?.length ? { disclosedContracts: opts.disclosedContracts } : {}),
         },
