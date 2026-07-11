@@ -41,7 +41,7 @@ const fmt0 = (n: number) => n.toLocaleString("en-US");
 function headlineSeeded(lens: Lens, treasury: number, decided: Decided): LedgerState["headline"] {
   switch (lens) {
     case "payer":
-      return { label: "Treasury", value: treasury, sub: "USDCx · Lumen Studio" };
+      return { label: "Treasury", value: treasury, sub: "USDCx · Nova DAO" };
     case "recipient":
       return { label: "Your balance", value: 4200, sub: "USDCx · settled" };
     case "auditor":
@@ -310,11 +310,11 @@ export function useLedger(lens: Lens): Ledger {
           switch (label) {
             case "Pay out batch":
               setSettled(true);
-              setResult("Batch settled on Canton — 5 lines cleared in one atomic transaction. Kwame Nyong · 32,000 is held for Priya Raman’s signature.");
+              setResult("Batch settled on Canton — 5 lines cleared in one atomic transaction. mert.eth · 32,000 is held for jules.eth’s signature.");
               break;
             case "Approve":
               setDecided("approved");
-              setResult("Approved — Kwame Nyong’s 32,000 settled. Maker–checker complete.");
+              setResult("Approved — mert.eth’s 32,000 settled. Maker–checker complete.");
               break;
             case "Hold":
               setDecided("held");

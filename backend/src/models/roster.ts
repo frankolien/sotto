@@ -12,14 +12,14 @@ export interface RecipientMeta {
   amount: number;
 }
 
-/** Five clear under the threshold; the score milestone exceeds it and is held. */
+/** Five clear under the threshold; the milestone grant exceeds it and is held. */
 export const RECIPIENTS: readonly RecipientMeta[] = [
-  { id: 'r1', hint: 'Amara', name: 'Amara Okafor', role: 'Sound design', handle: 'amara.lumen', amount: 4200 },
-  { id: 'r2', hint: 'Tobi', name: 'Tobi Adeyemi', role: 'Motion', handle: 'tobi.lumen', amount: 3850 },
-  { id: 'r3', hint: 'Chen', name: 'Chen Wei', role: 'Edit', handle: 'chen.lumen', amount: 5500 },
-  { id: 'r4', hint: 'Diego', name: 'Diego Marquez', role: 'Color', handle: 'diego.lumen', amount: 2900 },
-  { id: 'r5', hint: 'Fatima', name: 'Fatima Bello', role: 'Production', handle: 'fatima.lumen', amount: 4100 },
-  { id: 'r6', hint: 'Kwame', name: 'Kwame Nyong', role: 'Score · milestone', handle: 'kwame.lumen', amount: 32000 },
+  { id: 'r1', hint: 'Amara', name: 'amara.eth', role: 'Core protocol', handle: 'amara.eth', amount: 4200 },
+  { id: 'r2', hint: 'Tobi', name: 'tobi.eth', role: 'Smart contracts', handle: 'tobi.eth', amount: 3850 },
+  { id: 'r3', hint: 'Chen', name: 'chen.eth', role: 'Frontend', handle: 'chen.eth', amount: 5500 },
+  { id: 'r4', hint: 'Luca', name: 'luca.eth', role: 'DevRel', handle: 'luca.eth', amount: 2900 },
+  { id: 'r5', hint: 'Fatima', name: 'fatima.eth', role: 'Governance', handle: 'fatima.eth', amount: 4100 },
+  { id: 'r6', hint: 'Mert', name: 'mert.eth', role: 'Protocol V2 · milestone', handle: 'mert.eth', amount: 32000 },
 ];
 
 /** The recipient lens represents this contributor. */
@@ -29,13 +29,13 @@ export const BATCH_ID = 'BX-4471';
 export const BATCH_LABEL = 'May contributor payout';
 
 export const DEFAULT_CONFIG: RailConfig = {
-  org: 'Lumen Studio',
+  org: 'Nova DAO',
   treasury: 312480,
   cap: 200000,
   threshold: 25000,
-  approver: 'Priya Raman',
-  approverRole: 'Finance lead',
-  auditor: 'Hale & Co.',
+  approver: 'jules.eth',
+  approverRole: 'Core multisig',
+  auditor: 'Sable Audit',
   auditorRole: 'External audit',
 };
 

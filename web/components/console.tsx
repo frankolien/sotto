@@ -572,14 +572,14 @@ function MandateCard({ lens }: { lens: Lens }) {
       ? [
           ["Approval threshold", "25,000"],
           ["You sign", "over threshold"],
-          ["Approver", "Priya Raman"],
-          ["Auditor", "Hale & Co."],
+          ["Approver", "jules.eth"],
+          ["Auditor", "Sable Audit"],
         ]
       : [
           ["Per-cycle cap", "200,000"],
           ["Approval threshold", "25,000"],
-          ["Approver", "Priya Raman"],
-          ["Auditor", "Hale & Co."],
+          ["Approver", "jules.eth"],
+          ["Auditor", "Sable Audit"],
         ];
   return (
     <div className="rounded-xl border border-line bg-surface/50 p-5">

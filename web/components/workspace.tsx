@@ -746,7 +746,7 @@ function RequestAccess() {
             See it live on Canton
           </a>
           <a
-            href="mailto:access@sotto.dev?subject=Sotto%20early%20access"
+            href="mailto:gkenny896@gmail.com?subject=Sotto%20early%20access"
             className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm text-ink-2 transition hover:border-line-2 hover:text-ink"
           >
             Request early access

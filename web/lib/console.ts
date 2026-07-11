@@ -6,7 +6,7 @@ import { BATCH, TOTAL, YOU, type Lens } from "./batch";
 
 // The headline figure each identity sees on its dashboard.
 export const BALANCE: Record<Lens, { label: string; value: number; sub: string }> = {
-  payer: { label: "Treasury", value: 312480, sub: "USDCx · Lumen Studio" },
+  payer: { label: "Treasury", value: 312480, sub: "USDCx · Nova DAO" },
   recipient: { label: "Your balance", value: BATCH[YOU].amount, sub: "USDCx · settled" },
   auditor: { label: "Batch under audit", value: TOTAL, sub: "USDCx · 6 receipts" },
   approver: { label: "Awaiting your signature", value: 32000, sub: "USDCx · 1 payment" },
@@ -58,21 +58,21 @@ export const STATS: Record<Lens, { label: string; value: string; sub?: string }[
 export const ACTIVITY: Record<Lens, { title: string; meta: string }[]> = {
   payer: [
     { title: "Batch BX-4471 disbursed", meta: "5 lines settled atomically · just now" },
-    { title: "Kwame Nyong held for approval", meta: "32,000 over threshold · 2m ago" },
+    { title: "mert.eth held for approval", meta: "32,000 over threshold · 2m ago" },
     { title: "Mandate established", meta: "cap 200,000 · threshold 25,000 · 1h ago" },
     { title: "Treasury funded", meta: "312,480 USDCx minted · 1h ago" },
   ],
   recipient: [
-    { title: "Payment received", meta: "4,200 from Lumen Studio · just now" },
+    { title: "Payment received", meta: "4,200 from Nova DAO · just now" },
     { title: "Receipt issued on Canton", meta: "DisbursementReceipt · 00c263c2…" },
   ],
   auditor: [
-    { title: "Read access granted", meta: "batch BX-4471 · by Lumen Studio" },
+    { title: "Read access granted", meta: "batch BX-4471 · by Nova DAO" },
     { title: "6 receipts available", meta: "5 settled · 1 held for approval" },
     { title: "Mandate visible", meta: "cap, threshold, approver, auditor" },
   ],
   approver: [
-    { title: "Signature requested", meta: "32,000 to Kwame Nyong · just now" },
+    { title: "Signature requested", meta: "32,000 to mert.eth · just now" },
     { title: "5 lines settled without you", meta: "all under the 25,000 threshold" },
   ],
 };
@@ -93,6 +93,6 @@ export const INFO: Record<Lens, { title: string; body: string }> = {
   },
   approver: {
     title: "Maker–checker",
-    body: "You see only payments over the 25,000 threshold. The 32,000 to Kwame can't settle without your signature; the under-threshold lines settled atomically without you.",
+    body: "You see only payments over the 25,000 threshold. The 32,000 to mert.eth can't settle without your signature; the under-threshold lines settled atomically without you.",
   },
 };

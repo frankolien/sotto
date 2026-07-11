@@ -79,7 +79,10 @@ export class LedgerService {
     if (this.devnet) return this.initDevnet();
     await this.canton.uploadDar(darPath, this.adminUser);
     this.issuer = await this.canton.ensureParty('Issuer', this.adminUser);
-    this.payer = await this.canton.ensureParty('LumenStudio', this.adminUser);
+    // Local-only party-id seed (prod/devnet binds the operator's payer-sotto). Kept
+    // stable so the sandbox's custodian user keeps its act-as rights across restarts;
+    // the user-facing org name is cfg.org ("Nova DAO"), not this hint.
+    this.payer = await this.canton.ensureParty('SottoTreasury', this.adminUser);
     await this.canton.ensureUser(
       this.CUSTODIAN,
       [canActAs(this.payer), canActAs(this.issuer), canReadAs(this.payer), canReadAs(this.issuer)],
@@ -117,8 +120,8 @@ export class LedgerService {
     // Fixed roster → the two operator-allocated recipient parties. One clears under
     // the threshold (atomic settle); one exceeds it (maker-checker).
     this.roster = [
-      { id: 'r1', hint: 'recipient-sotto', name: 'Amara Okafor', role: 'Sound design', handle: 'amara.lumen', amount: 4200 },
-      { id: 'r6', hint: 'recipient2-sotto', name: 'Kwame Nyong', role: 'Score · milestone', handle: 'kwame.lumen', amount: 32000 },
+      { id: 'r1', hint: 'recipient-sotto', name: 'amara.eth', role: 'Core protocol', handle: 'amara.eth', amount: 4200 },
+      { id: 'r6', hint: 'recipient2-sotto', name: 'mert.eth', role: 'Protocol V2 · milestone', handle: 'mert.eth', amount: 32000 },
     ];
     this.youId = 'r1';
     this.recipientParty.clear();
