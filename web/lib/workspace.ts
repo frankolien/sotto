@@ -59,6 +59,8 @@ export type WsView = {
   balance: number;
   contracts: { kind: string; amount: number | null; recipient?: string }[];
 };
+export type WsEventKind = "created" | "funded" | "roster" | "mandate" | "settled" | "approved" | "rejected" | "cycle";
+export type WsEvent = { at: string; kind: WsEventKind; summary: string; amount?: number; batchRef?: string };
 
 async function req<T>(path: string, init?: RequestInit, token = getToken()): Promise<T> {
   const ctrl = new AbortController();
@@ -105,6 +107,7 @@ export const fund = (amount: number) =>
   req<WsDashboard>("/api/workspace/fund", { method: "POST", body: JSON.stringify({ amount }) });
 export const establishMandate = () => req<WsDashboard>("/api/workspace/mandate", { method: "POST" });
 export const dashboard = () => req<WsDashboard>("/api/workspace");
+export const activity = () => req<{ events: WsEvent[] }>("/api/workspace/activity");
 export const settle = () => req<WsDashboard>("/api/workspace/settle", { method: "POST" });
 export const approve = (lineId: string) => req<WsDashboard>(`/api/workspace/approve/${lineId}`, { method: "POST" });
 export const reject = (lineId: string) => req<WsDashboard>(`/api/workspace/reject/${lineId}`, { method: "POST" });

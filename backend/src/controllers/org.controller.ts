@@ -70,6 +70,11 @@ export class OrgController {
     res.json(await this.orgs.payerView(this.orgId(req)));
   };
 
+  /** The org's activity trail — funding, batches, approvals, cycles. */
+  activity = async (req: Request, res: Response): Promise<void> => {
+    res.json({ events: this.orgs.activity(this.orgId(req)) });
+  };
+
   setContributors = async (req: Request, res: Response): Promise<void> => {
     const rows = Array.isArray(req.body?.contributors) ? req.body.contributors : [];
     const contributors = rows.map((r: Record<string, unknown>) => ({

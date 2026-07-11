@@ -10,13 +10,14 @@
 // scoped view-user this service ensures). Orgs are fully isolated: each has its own
 // parties, treasury, mandate and roster, persisted in the OrgStore.
 
-import { Contributor, Org, OrgConfig, orgSlug } from '../models/org.ts';
+import { Contributor, Org, OrgEvent, OrgEventKind, OrgConfig, nextBatchRef, orgSlug } from '../models/org.ts';
 import { CantonService, CreatedEvent, canActAs, canReadAs } from './canton.service.ts';
 import { OrgStore } from './org-store.ts';
 
 const num = (s: unknown): number => Number(String(s));
 const dec = (n: number): string => n.toFixed(4);
 const hintOf = (party: string): string => party.split('::')[0];
+const EVENT_CAP = 200; // keep the activity trail bounded per org
 
 export type LineStatus = 'draft' | 'settled' | 'pending' | 'rejected';
 
@@ -59,12 +60,25 @@ export class OrgService {
     return user;
   }
 
+  /** Append an activity entry to an org (does NOT persist — the caller's own
+   * store.save writes it alongside the state change it describes). */
+  private record(org: Org, kind: OrgEventKind, summary: string, extra: Partial<OrgEvent> = {}): void {
+    const events = (org.events ??= []);
+    events.push({ at: new Date().toISOString(), kind, summary, ...extra });
+    if (events.length > EVENT_CAP) org.events = events.slice(-EVENT_CAP);
+  }
+
   list(): Org[] {
     return this.store.list();
   }
 
   get(id: string): Org | undefined {
     return this.store.get(id);
+  }
+
+  /** The org's activity trail, most-recent first. */
+  activity(orgId: string): OrgEvent[] {
+    return [...(this.require(orgId).events ?? [])].reverse();
   }
 
   /** Create a workspace: allocate the org's own treasury party (payer == issuer for
@@ -91,8 +105,10 @@ export class OrgService {
       treasury: 0,
       mandateCid: '',
       batchRef: `${id.toUpperCase()}-1`,
+      events: [],
       createdAt: new Date().toISOString(),
     };
+    this.record(org, 'created', `Workspace created on Canton`);
     this.store.save(org);
     return org;
   }
@@ -101,10 +117,18 @@ export class OrgService {
    * validate + store them; we never allocate or custody them. */
   setContributors(orgId: string, rows: Omit<Contributor, 'id'>[]): Org {
     const org = this.require(orgId);
-    org.contributors = rows.map((r, i) => {
+    // Keep a contributor's id stable across roster edits by matching on their
+    // party, so pending-proposal bookkeeping (keyed by line id) survives an edit;
+    // new parties get a fresh id above the current high-water mark.
+    const idByParty = new Map(org.contributors.map((c) => [c.party, c.id]));
+    let maxId = org.contributors.reduce((m, c) => Math.max(m, Number(c.id.replace(/\D/g, '')) || 0), 0);
+    org.contributors = rows.map((r) => {
       if (!/::/.test(r.party)) throw new Error(`contributor "${r.name}" needs a full Canton party id (name::fingerprint)`);
-      return { id: `c${i + 1}`, party: r.party, name: r.name, role: r.role, amount: r.amount };
+      const id = idByParty.get(r.party) ?? `c${++maxId}`;
+      return { id, party: r.party, name: r.name, role: r.role, amount: r.amount };
     });
+    const total = org.contributors.reduce((a, r) => a + r.amount, 0);
+    this.record(org, 'roster', `Roster set · ${org.contributors.length} contributor${org.contributors.length === 1 ? '' : 's'} · ${total.toLocaleString('en-US')} ${org.config.asset}`, { amount: total });
     this.store.save(org);
     return org;
   }
@@ -119,6 +143,7 @@ export class OrgService {
       this.payerUser(org),
     );
     org.treasury += amount;
+    this.record(org, 'funded', `Treasury funded · +${amount.toLocaleString('en-US')} ${org.config.asset}`, { amount });
     this.store.save(org);
     return org;
   }
@@ -142,6 +167,7 @@ export class OrgService {
       this.payerUser(org),
     );
     org.mandateCid = created.find((e) => e.templateId.endsWith(':PayoutMandate'))?.contractId ?? org.mandateCid;
+    this.record(org, 'mandate', `Mandate established · cap ${c.cap.toLocaleString('en-US')} · threshold ${c.threshold.toLocaleString('en-US')} ${c.asset}`);
     this.store.save(org);
     return org;
   }
@@ -162,8 +188,10 @@ export class OrgService {
     }
     org.treasury = 0;
     org.mandateCid = '';
+    org.batchRef = nextBatchRef(org.batchRef);
     this.proposalCid.delete(orgId);
     this.proposalTreasury.delete(orgId);
+    this.record(org, 'cycle', `New cycle · ${org.batchRef}`, { batchRef: org.batchRef });
     this.store.save(org);
   }
 
@@ -225,6 +253,15 @@ export class OrgService {
     }
     this.proposalCid.set(orgId, props);
     this.proposalTreasury.set(orgId, treas);
+
+    const paid = under.reduce((a, r) => a + r.amount, 0);
+    const parts: string[] = [];
+    if (under.length) parts.push(`${under.length} paid · ${paid.toLocaleString('en-US')} ${c.asset}`);
+    if (over.length) parts.push(`${over.length} held for signer`);
+    if (parts.length) {
+      this.record(org, 'settled', `Batch ${org.batchRef} · ${parts.join(' · ')}`, { amount: paid, batchRef: org.batchRef });
+      this.store.save(org);
+    }
     return org;
   }
 
@@ -258,6 +295,9 @@ export class OrgService {
     );
     this.proposalCid.get(orgId)?.delete(lineId);
     this.proposalTreasury.get(orgId)?.delete(lineId);
+    const c = org.contributors.find((r) => r.id === lineId);
+    this.record(org, 'approved', `Signed off ${c?.name ?? lineId}${c ? ` · ${c.amount.toLocaleString('en-US')} ${org.config.asset}` : ''}`, { amount: c?.amount, batchRef: org.batchRef });
+    this.store.save(org);
   }
 
   async reject(orgId: string, lineId: string): Promise<void> {
@@ -273,6 +313,9 @@ export class OrgService {
     );
     this.proposalCid.get(orgId)?.delete(lineId);
     this.proposalTreasury.get(orgId)?.delete(lineId);
+    const c = org.contributors.find((r) => r.id === lineId);
+    this.record(org, 'rejected', `Held ${c?.name ?? lineId}${c ? ` · ${c.amount.toLocaleString('en-US')} ${org.config.asset}` : ''}`, { amount: c?.amount, batchRef: org.batchRef });
+    this.store.save(org);
   }
 
   /** The org's own (payer) view: treasury + every line with its live status, read

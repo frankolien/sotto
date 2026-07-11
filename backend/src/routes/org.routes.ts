@@ -20,6 +20,7 @@ export function orgRoutes(controller: OrgController, sessions: SessionService): 
   router.post('/orgs/:id/login', asyncHandler(controller.login));
 
   router.get('/workspace', workspace, asyncHandler(controller.dashboard));
+  router.get('/workspace/activity', workspace, asyncHandler(controller.activity));
   router.put('/workspace/contributors', workspace, asyncHandler(controller.setContributors));
   router.post('/workspace/fund', workspace, asyncHandler(controller.fund));
   router.post('/workspace/mandate', workspace, asyncHandler(controller.mandate));

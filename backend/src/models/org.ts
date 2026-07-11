@@ -30,6 +30,27 @@ export interface OrgConfig {
   auditorLabel: string; // display, e.g. 'LlamaRisk'
 }
 
+/** One entry in an org's activity trail. Each is recorded the moment the engine
+ * performs the corresponding ledger action, so the log is an honest, ordered
+ * history of what actually happened on the rail — funding, batches, approvals. */
+export type OrgEventKind =
+  | 'created'
+  | 'funded'
+  | 'roster'
+  | 'mandate'
+  | 'settled'
+  | 'approved'
+  | 'rejected'
+  | 'cycle';
+
+export interface OrgEvent {
+  at: string; // ISO timestamp
+  kind: OrgEventKind;
+  summary: string; // human-readable one-liner
+  amount?: number; // value moved, when the event has one
+  batchRef?: string; // the cycle it belongs to, when relevant
+}
+
 /** A tenant. `payerParty`/`issuerParty` are allocated once at creation and
  * persisted, so a restart re-binds the same on-ledger identities (party
  * allocation is idempotent by hint) rather than losing the org. */
@@ -42,8 +63,15 @@ export interface Org {
   treasury: number; // amount funded into the treasury
   mandateCid: string; // the live PayoutMandate contract, if established
   batchRef: string; // current cycle label
+  events?: OrgEvent[]; // activity trail, most-recent last (optional for legacy orgs)
   createdAt: string; // ISO
 }
+
+/** Bump a cycle label's trailing counter: NOVA-1 → NOVA-2. */
+export const nextBatchRef = (cur: string): string => {
+  const m = /^(.*?)(\d+)$/.exec(cur);
+  return m ? `${m[1]}${Number(m[2]) + 1}` : `${cur}-2`;
+};
 
 /** A slug safe for a party-id hint and a URL: alphanumeric, lowercased. */
 export const orgSlug = (name: string): string =>

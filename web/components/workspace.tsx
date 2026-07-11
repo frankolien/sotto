@@ -337,6 +337,74 @@ function Row2({ k, v }: { k: string; v: string }) {
   );
 }
 
+/* ── dashboard helpers ──────────────────────────────────────────────────────── */
+
+const ago = (iso: string): string => {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (s < 60) return "just now";
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+};
+
+// A colored dot per event kind — the whole activity row's visual language.
+const EVENT_DOT: Record<ws.WsEventKind, string> = {
+  created: "bg-ink-3",
+  funded: "bg-good",
+  roster: "bg-accent",
+  mandate: "bg-accent",
+  settled: "bg-good",
+  approved: "bg-good",
+  rejected: "bg-warn",
+  cycle: "bg-accent",
+};
+
+function Modal({
+  title,
+  sub,
+  onClose,
+  size = "md",
+  children,
+}: {
+  title: string;
+  sub?: string;
+  onClose: () => void;
+  size?: "md" | "lg";
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div
+        className={`w-full ${size === "lg" ? "max-w-lg" : "max-w-md"} rounded-2xl border border-line bg-surface p-6`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between">
+          <div>
+            <h3 className="font-semibold">{title}</h3>
+            {sub ? <p className="mt-0.5 text-xs text-ink-3">{sub}</p> : null}
+          </div>
+          <button onClick={onClose} className="text-ink-3 hover:text-ink" aria-label="close">
+            ✕
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ActivityRow({ e }: { e: ws.WsEvent }) {
+  return (
+    <div className="flex items-center gap-3 px-4 py-3">
+      <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${EVENT_DOT[e.kind]}`} />
+      <span className="min-w-0 flex-1 truncate text-sm text-ink-2">{e.summary}</span>
+      <span className="shrink-0 font-mono text-[11px] text-ink-3">{ago(e.at)}</span>
+    </div>
+  );
+}
+
 /* ── workspace dashboard ────────────────────────────────────────────────────── */
 
 function Dashboard({
@@ -352,6 +420,11 @@ function Dashboard({
   const [err, setErr] = useState<string | null>(null);
   const [peek, setPeek] = useState<{ line: ws.WsLine; view: ws.WsView } | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  const [events, setEvents] = useState<ws.WsEvent[]>([]);
+  const [fundOpen, setFundOpen] = useState(false);
+  const [fundAmt, setFundAmt] = useState("");
+  const [rosterOpen, setRosterOpen] = useState(false);
+  const [draft, setDraft] = useState<Row[]>([]);
 
   const anyDraft = board.lines.some((l) => l.status === "draft");
   const pendingOver = board.lines.filter((l) => l.over && l.status === "pending");
@@ -360,16 +433,47 @@ function Dashboard({
     [board.lines],
   );
 
+  const refreshActivity = () => ws.activity().then((r) => setEvents(r.events)).catch(() => {});
+  useEffect(() => {
+    refreshActivity();
+  }, []);
+
   async function run(label: string, fn: () => Promise<ws.WsDashboard>) {
     setErr(null);
     setBusy(label);
     try {
       setBoard(await fn());
+      await refreshActivity();
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
       setBusy(null);
     }
+  }
+
+  async function addFunds() {
+    const amt = Number(fundAmt);
+    if (!(amt > 0)) return;
+    setFundOpen(false);
+    setFundAmt("");
+    await run("Adding funds…", () => ws.fund(amt));
+  }
+
+  function openRoster() {
+    setDraft(board.lines.map((l) => ({ name: l.name, party: l.party, role: l.role, amount: String(l.amount) })));
+    setRosterOpen(true);
+  }
+
+  const rosterValid = draft.filter((r) => r.name.trim() && /::/.test(r.party) && Number(r.amount) > 0);
+  async function saveRoster() {
+    if (!rosterValid.length) return;
+    setRosterOpen(false);
+    await run("Updating roster…", async () => {
+      await ws.setContributors(
+        rosterValid.map((r) => ({ name: r.name.trim(), party: r.party.trim(), role: r.role.trim() || "Contributor", amount: Number(r.amount) })),
+      );
+      return ws.establishMandate();
+    });
   }
 
   async function peekAt(line: ws.WsLine) {
@@ -416,6 +520,12 @@ function Dashboard({
       <div className="mt-5 flex flex-wrap gap-2">
         <Btn onClick={() => run("Running batch…", ws.settle)} disabled={!anyDraft || !!busy}>
           {busy === "Running batch…" ? "Running…" : "Run batch"}
+        </Btn>
+        <Btn variant="ghost" onClick={() => setFundOpen(true)} disabled={!!busy}>
+          Add funds
+        </Btn>
+        <Btn variant="ghost" onClick={openRoster} disabled={!!busy}>
+          Manage roster
         </Btn>
         {pendingOver.map((l) => (
           <span key={l.id} className="inline-flex gap-1">
@@ -479,6 +589,18 @@ function Dashboard({
         “view as” reads the ledger as that contributor’s wallet — proof they see only their own line. ▲ = over the approval threshold.
       </p>
 
+      {/* activity — an honest trail of every action taken on the rail */}
+      <div className="mt-8">
+        <div className="mono-label mb-3 text-[11px] text-ink-3">Activity</div>
+        <div className="divide-y divide-line overflow-hidden rounded-2xl border border-line">
+          {events.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-ink-3">No activity yet — fund the treasury or run a batch.</p>
+          ) : (
+            events.map((e, i) => <ActivityRow key={`${e.at}-${i}`} e={e} />)
+          )}
+        </div>
+      </div>
+
       {/* privacy peek */}
       {peek ? (
         <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/50 p-4" onClick={() => setPeek(null)}>
@@ -511,6 +633,92 @@ function Dashboard({
             </p>
           </div>
         </div>
+      ) : null}
+
+      {/* add funds */}
+      {fundOpen ? (
+        <Modal title="Add funds" sub={`Mint more ${board.asset} into ${board.org}’s treasury.`} onClose={() => setFundOpen(false)}>
+          <div className="mt-4">
+            <input
+              className={`${inputCls} tnum`}
+              value={fundAmt}
+              onChange={(e) => setFundAmt(e.target.value)}
+              inputMode="numeric"
+              placeholder={`Amount (${board.asset})`}
+              autoFocus
+            />
+            <div className="mt-4 flex justify-end gap-2">
+              <Btn variant="ghost" onClick={() => setFundOpen(false)}>
+                Cancel
+              </Btn>
+              <Btn onClick={addFunds} disabled={!(Number(fundAmt) > 0)}>
+                Add {Number(fundAmt) > 0 ? fmt(Number(fundAmt)) : ""} {board.asset}
+              </Btn>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {/* manage roster */}
+      {rosterOpen ? (
+        <Modal
+          title="Manage roster"
+          sub="Add, edit or remove contributors — saving re-encodes the mandate on Canton."
+          size="lg"
+          onClose={() => setRosterOpen(false)}
+        >
+          <div className="mt-4 max-h-[50vh] space-y-3 overflow-y-auto pr-1">
+            {draft.map((r, i) => {
+              const over = Number(r.amount) > board.threshold && board.threshold > 0;
+              const set = (patch: Partial<Row>) => setDraft((d) => d.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+              return (
+                <div key={i} className="rounded-xl border border-line bg-surface-2 p-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <input className={inputCls} value={r.name} placeholder="Handle · nebula.eth" onChange={(e) => set({ name: e.target.value })} />
+                    <input className={inputCls} value={r.role} placeholder="Role · Protocol eng" onChange={(e) => set({ role: e.target.value })} />
+                  </div>
+                  <input
+                    className={`${inputCls} font-mono text-xs`}
+                    value={r.party}
+                    placeholder="Their Canton wallet · nebula::1220…"
+                    onChange={(e) => set({ party: e.target.value })}
+                  />
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      className={`${inputCls} tnum flex-1`}
+                      value={r.amount}
+                      inputMode="numeric"
+                      placeholder={`Amount (${board.asset})`}
+                      onChange={(e) => set({ amount: e.target.value })}
+                    />
+                    {over ? <span className="text-[11px] text-warn">needs signer</span> : null}
+                    {draft.length > 1 ? (
+                      <button onClick={() => setDraft((d) => d.filter((_, j) => j !== i))} className="text-ink-3 hover:text-warn" aria-label="remove">
+                        ✕
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+            <button onClick={() => setDraft((d) => [...d, emptyRow()])} className="text-sm text-accent hover:brightness-110">
+              + Add contributor
+            </button>
+          </div>
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <span className="text-xs text-ink-3">
+              {rosterValid.length} valid · {fmt(rosterValid.reduce((a, r) => a + Number(r.amount), 0))} {board.asset}
+            </span>
+            <div className="flex gap-2">
+              <Btn variant="ghost" onClick={() => setRosterOpen(false)}>
+                Cancel
+              </Btn>
+              <Btn onClick={saveRoster} disabled={!rosterValid.length}>
+                Save roster
+              </Btn>
+            </div>
+          </div>
+        </Modal>
       ) : null}
     </Shell>
   );
