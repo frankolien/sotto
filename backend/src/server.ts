@@ -50,7 +50,13 @@ async function main(): Promise<void> {
   // Multi-tenant, self-custody workspace engine (additive; shares the Canton client).
   const orgStore = new OrgStore(config.orgStore);
   const orgService = new OrgService(canton, config.auth.adminUser, orgStore);
-  const orgController = new OrgController(orgService, sessions);
+  // Creating a workspace allocates a fresh Canton party for the org's treasury.
+  // Only a backend with party-allocation rights can do that (local sandbox / own
+  // validator); on shared DevNet we only hold act-as rights on pre-created parties,
+  // so self-serve onboarding is gated off there. SOTTO_GATE_ONBOARDING=1 forces the
+  // gated state on any backend (to preview the request-access experience locally).
+  const canProvision = config.ledgerMode !== 'devnet' && process.env.SOTTO_GATE_ONBOARDING !== '1';
+  const orgController = new OrgController(orgService, sessions, canProvision);
 
   // Listen FIRST, then bootstrap. In RS256 mode the node validates our tokens
   // against the JWKS we publish, so that endpoint must be reachable before the

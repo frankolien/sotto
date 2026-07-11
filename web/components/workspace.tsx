@@ -724,34 +724,79 @@ function Dashboard({
   );
 }
 
+/* ── early-access gate ──────────────────────────────────────────────────────── */
+
+// Shown on deployments that can't allocate parties yet (shared DevNet). Never a
+// dead end: it funnels to the working live demo and offers to request access.
+function RequestAccess() {
+  return (
+    <Shell>
+      <div className="mx-auto max-w-xl py-10 text-center">
+        <p className="mono-label text-[11px] text-accent">Early access</p>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Sotto is onboarding teams</h1>
+        <p className="mt-2 text-sm text-ink-2">
+          The self-custody payout workspace is rolling out to crypto-native teams. See it running live
+          on Canton now, or request early access for your DAO.
+        </p>
+        <div className="mt-6 flex items-center justify-center gap-3">
+          <a
+            href="/app"
+            className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:brightness-110"
+          >
+            See it live on Canton
+          </a>
+          <a
+            href="mailto:access@sotto.dev?subject=Sotto%20early%20access"
+            className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm text-ink-2 transition hover:border-line-2 hover:text-ink"
+          >
+            Request early access
+          </a>
+        </div>
+        <p className="mt-6 text-xs text-ink-3">
+          Your workspace runs on a Canton participant your team controls — self-serve onboarding lands as we roll out validators.
+        </p>
+      </div>
+    </Shell>
+  );
+}
+
 /* ── entry ──────────────────────────────────────────────────────────────────── */
 
 export function Workspace() {
   const [ready, setReady] = useState(false);
   const [board, setBoard] = useState<ws.WsDashboard | null>(null);
+  const [available, setAvailable] = useState(true); // optimistic; only gated when the backend says so
 
   useEffect(() => {
     const t = ws.getToken();
-    if (!t) {
-      setReady(true);
+    if (t) {
+      ws.dashboard()
+        .then(setBoard)
+        .catch(() => ws.setToken(null))
+        .finally(() => setReady(true));
       return;
     }
-    ws.dashboard()
-      .then(setBoard)
-      .catch(() => ws.setToken(null))
+    ws.availability()
+      .then((a) => setAvailable(a.available))
+      .catch(() => {
+        /* if the check itself is unreachable, stay optimistic — create is guarded server-side too */
+      })
       .finally(() => setReady(true));
   }, []);
 
   if (!ready) return <Splash />;
-  if (!board) return <Onboard onDone={setBoard} />;
-  return (
-    <Dashboard
-      board={board}
-      setBoard={setBoard}
-      onExit={() => {
-        ws.setToken(null);
-        setBoard(null);
-      }}
-    />
-  );
+  if (board) {
+    return (
+      <Dashboard
+        board={board}
+        setBoard={setBoard}
+        onExit={() => {
+          ws.setToken(null);
+          setBoard(null);
+        }}
+      />
+    );
+  }
+  if (!available) return <RequestAccess />;
+  return <Onboard onDone={setBoard} />;
 }

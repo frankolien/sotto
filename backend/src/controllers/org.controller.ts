@@ -23,14 +23,26 @@ export class OrgController {
   constructor(
     private readonly orgs: OrgService,
     private readonly sessions: SessionService,
+    // Whether this backend can allocate parties (i.e. create workspaces). False on
+    // shared DevNet, where onboarding is gated to a "request access" state.
+    private readonly canProvision = true,
   ) {}
 
   private orgId(req: Request): string {
     return req.principal!.orgId!;
   }
 
+  /** Public: whether self-serve workspace creation is available here. The web
+   * uses this to gate /build gracefully instead of dead-ending on a failed create. */
+  availability = async (_req: Request, res: Response): Promise<void> => {
+    res.json({ available: this.canProvision });
+  };
+
   /** Create a workspace and return a session scoped to it. */
   create = async (req: Request, res: Response): Promise<void> => {
+    if (!this.canProvision) {
+      throw new HttpError(503, 'Self-serve workspaces are not available on this deployment yet — request early access.');
+    }
     const b = req.body ?? {};
     const config: OrgConfig = {
       name: str(b.name, 'name'),

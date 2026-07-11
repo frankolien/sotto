@@ -15,6 +15,7 @@ export function orgRoutes(controller: OrgController, sessions: SessionService): 
   // scoped to one wallet) must never reach the payer dashboard.
   const workspace = [auth, requireOrg, requireRole('payer')];
 
+  router.get('/workspace-availability', asyncHandler(controller.availability));
   router.post('/orgs', asyncHandler(controller.create));
   router.get('/orgs', asyncHandler(controller.list));
   router.post('/orgs/:id/login', asyncHandler(controller.login));
