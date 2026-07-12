@@ -40,10 +40,17 @@ export type ApiState = {
   activity: { title: string; meta: string }[];
 };
 
-// A short timeout so an unreachable backend fails fast into the seeded fallback.
-async function req<T>(path: string, init?: RequestInit, token?: string): Promise<T> {
+// Reads use a short timeout so an unreachable backend fails fast into the seeded
+// fallback. Writes (settle/approve/reject) run real Canton submits on a shared
+// DevNet node — those take several seconds to tens of seconds — so they get a much
+// longer budget; aborting them mid-flight is what produced the cryptic
+// "signal is aborted without reason".
+const READ_TIMEOUT = 6000;
+const WRITE_TIMEOUT = 90000;
+
+async function req<T>(path: string, init?: RequestInit, token?: string, timeoutMs = READ_TIMEOUT): Promise<T> {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), 6000);
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(`${BASE}${path}`, {
       ...init,
@@ -59,6 +66,12 @@ async function req<T>(path: string, init?: RequestInit, token?: string): Promise
     });
     if (!res.ok) throw new Error(`${path} → ${res.status}`);
     return (await res.json()) as T;
+  } catch (e) {
+    // Turn the raw AbortError into something a person can act on.
+    if (e instanceof DOMException && e.name === "AbortError") {
+      throw new Error("The ledger is taking longer than usual — give it a moment and try again.");
+    }
+    throw e;
   } finally {
     clearTimeout(t);
   }
@@ -81,11 +94,11 @@ export async function fetchState(role: Lens): Promise<ApiState> {
 /** Payer disburses the batch (atomic settle). Returns the payer's updated state. */
 export async function settleApi(): Promise<ApiState> {
   const token = await login("payer");
-  return req<ApiState>("/api/settle", { method: "POST" }, token);
+  return req<ApiState>("/api/settle", { method: "POST" }, token, WRITE_TIMEOUT);
 }
 
 /** Approver decides the over-threshold line. */
 export async function decideApi(lineId: string, action: "approve" | "reject"): Promise<ApiState> {
   const token = await login("approver");
-  return req<ApiState>(`/api/${action}/${lineId}`, { method: "POST" }, token);
+  return req<ApiState>(`/api/${action}/${lineId}`, { method: "POST" }, token, WRITE_TIMEOUT);
 }
