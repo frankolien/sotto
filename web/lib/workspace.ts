@@ -95,6 +95,10 @@ async function req<T>(path: string, init?: RequestInit, token = getToken()): Pro
  * shared DevNet — the web uses it to gate onboarding into a "request access" state. */
 export const availability = () => req<{ available: boolean }>("/api/workspace-availability", undefined, null);
 
+/** Public: capture an early-access signup from the gated onboarding screen. */
+export const requestAccess = (email: string, org?: string) =>
+  req<{ ok: boolean }>("/api/early-access", { method: "POST", body: JSON.stringify({ email, org }) }, null);
+
 /** Create a workspace; stores + returns the session scoped to it. */
 export async function createWorkspace(config: WsConfig): Promise<{ id: string }> {
   const { org, token } = await req<{ org: { id: string }; token: string }>("/api/orgs", {

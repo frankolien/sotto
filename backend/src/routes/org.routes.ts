@@ -16,6 +16,7 @@ export function orgRoutes(controller: OrgController, sessions: SessionService): 
   const workspace = [auth, requireOrg, requireRole('payer')];
 
   router.get('/workspace-availability', asyncHandler(controller.availability));
+  router.post('/early-access', asyncHandler(controller.earlyAccess));
   router.post('/orgs', asyncHandler(controller.create));
   router.get('/orgs', asyncHandler(controller.list));
   router.post('/orgs/:id/login', asyncHandler(controller.login));

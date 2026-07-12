@@ -8,6 +8,9 @@ import { HttpError } from '../middleware/http-error.ts';
 import { OrgConfig } from '../models/org.ts';
 import { OrgService } from '../services/org.service.ts';
 import { SessionService } from '../services/session.ts';
+import { Waitlist } from '../services/waitlist.ts';
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const str = (v: unknown, field: string): string => {
   if (typeof v !== 'string' || !v.trim()) throw new HttpError(400, `${field} is required`);
@@ -26,7 +29,17 @@ export class OrgController {
     // Whether this backend can allocate parties (i.e. create workspaces). False on
     // shared DevNet, where onboarding is gated to a "request access" state.
     private readonly canProvision = true,
+    private readonly waitlist?: Waitlist,
   ) {}
+
+  /** Public: capture an early-access signup (from the gated /build screen). */
+  earlyAccess = async (req: Request, res: Response): Promise<void> => {
+    const email = str(req.body?.email, 'email').toLowerCase();
+    if (!EMAIL_RE.test(email)) throw new HttpError(400, 'Enter a valid email address');
+    const org = typeof req.body?.org === 'string' ? req.body.org.trim().slice(0, 120) : undefined;
+    this.waitlist?.record(email, org || undefined);
+    res.status(201).json({ ok: true });
+  };
 
   private orgId(req: Request): string {
     return req.principal!.orgId!;

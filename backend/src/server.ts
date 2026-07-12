@@ -1,3 +1,5 @@
+import { dirname, join } from 'node:path';
+
 import { createApp } from './app.ts';
 import { config } from './config/index.ts';
 import { LedgerController } from './controllers/ledger.controller.ts';
@@ -9,6 +11,7 @@ import { OrgService } from './services/org.service.ts';
 import { OrgStore } from './services/org-store.ts';
 import { OrgController } from './controllers/org.controller.ts';
 import { SessionService } from './services/session.ts';
+import { Waitlist } from './services/waitlist.ts';
 
 async function main(): Promise<void> {
   // The Ledger-API token issuer. Devnet uses the operator's OIDC (Keycloak); locally
@@ -56,7 +59,9 @@ async function main(): Promise<void> {
   // so self-serve onboarding is gated off there. SOTTO_GATE_ONBOARDING=1 forces the
   // gated state on any backend (to preview the request-access experience locally).
   const canProvision = config.ledgerMode !== 'devnet' && process.env.SOTTO_GATE_ONBOARDING !== '1';
-  const orgController = new OrgController(orgService, sessions, canProvision);
+  // Early-access signups live next to the org store.
+  const waitlist = new Waitlist(join(dirname(config.orgStore), 'early-access.jsonl'));
+  const orgController = new OrgController(orgService, sessions, canProvision, waitlist);
 
   // Listen FIRST, then bootstrap. In RS256 mode the node validates our tokens
   // against the JWKS we publish, so that endpoint must be reachable before the

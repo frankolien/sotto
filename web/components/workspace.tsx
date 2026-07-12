@@ -729,29 +729,78 @@ function Dashboard({
 // Shown on deployments that can't allocate parties yet (shared DevNet). Never a
 // dead end: it funnels to the working live demo and offers to request access.
 function RequestAccess() {
+  const [email, setEmail] = useState("");
+  const [org, setOrg] = useState("");
+  const [status, setStatus] = useState<"idle" | "sending" | "done">("idle");
+  const [err, setErr] = useState<string | null>(null);
+
+  const valid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!valid || status === "sending") return;
+    setErr(null);
+    setStatus("sending");
+    try {
+      await ws.requestAccess(email.trim(), org.trim() || undefined);
+      setStatus("done");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Something went wrong — try again.");
+      setStatus("idle");
+    }
+  }
+
   return (
     <Shell>
-      <div className="mx-auto max-w-xl py-10 text-center">
+      <div className="mx-auto max-w-md py-10 text-center">
         <p className="mono-label text-[11px] text-accent">Early access</p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">Sotto is onboarding teams</h1>
         <p className="mt-2 text-sm text-ink-2">
-          The self-custody payout workspace is rolling out to crypto-native teams. See it running live
-          on Canton now, or request early access for your DAO.
+          The self-custody payout workspace is rolling out to crypto-native teams. Leave your email and
+          we&rsquo;ll set up your DAO — or see it running live on Canton now.
         </p>
-        <div className="mt-6 flex items-center justify-center gap-3">
-          <a
-            href="/app"
-            className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:brightness-110"
-          >
-            See it live on Canton
-          </a>
-          <a
-            href="mailto:gkenny896@gmail.com?subject=Sotto%20early%20access"
-            className="inline-flex items-center gap-2 rounded-lg border border-line px-4 py-2 text-sm text-ink-2 transition hover:border-line-2 hover:text-ink"
-          >
-            Request early access
+
+        {status === "done" ? (
+          <div className="mt-6 rounded-2xl border border-good/30 bg-good/10 p-6">
+            <div className="text-lg font-semibold text-good">You&rsquo;re on the list ✓</div>
+            <p className="mt-1 text-sm text-ink-2">
+              We&rsquo;ll reach out at <span className="text-ink">{email.trim()}</span> when your workspace is ready.
+            </p>
+          </div>
+        ) : (
+          <form onSubmit={submit} className="mt-6 space-y-2.5 text-left">
+            <input
+              type="email"
+              required
+              autoFocus
+              className={inputCls}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@yourdao.xyz"
+            />
+            <input
+              className={inputCls}
+              value={org}
+              onChange={(e) => setOrg(e.target.value)}
+              placeholder="Your DAO / protocol (optional)"
+            />
+            <button
+              type="submit"
+              disabled={!valid || status === "sending"}
+              className="w-full rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {status === "sending" ? "Requesting…" : "Request early access"}
+            </button>
+            {err ? <p className="text-xs text-warn">{err}</p> : null}
+          </form>
+        )}
+
+        <div className="mt-5">
+          <a href="/app" className="text-sm text-accent transition hover:brightness-110">
+            See it live on Canton →
           </a>
         </div>
+
         <p className="mt-6 text-xs text-ink-3">
           Your workspace runs on a Canton participant your team controls — self-serve onboarding lands as we roll out validators.
         </p>
